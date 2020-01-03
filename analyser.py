@@ -6,7 +6,6 @@ from dataStruct import VN
 from dataStruct import InstructionStream
 from dataStruct import Instruction
 from dataStruct import SymbolTable
-from dataStruct import SymbolTableItem
 from dataStruct import Error
 from dataStruct import tableitem
 from dataStruct import func
@@ -64,8 +63,6 @@ class analyser:
     # 设置sym状态为指定状态
     def setsymat(self, pointer):
         self.pointer = pointer
-    def addSymbol(self, name, value, itemType):
-        self.symbolTable.addItem(name, value, itemType)
     def scan(self):
         # 进入程序是当前单词已经是链表的第一个单词
         self.program = self.C0_program()
@@ -163,7 +160,6 @@ class analyser:
         # 防止只有 const 保留字和/或 ; 被读入了
         if not V_const_declaration.hasVn():
             V_const_declaration.empty()
-        self.run_declaration(V_const_declaration)
         return self.checkEmpty(V_const_declaration)
 
     #<variable-declaration> ::= <type-specifier><init-declarator-list>';'
@@ -198,7 +194,6 @@ class analyser:
             self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
         if not V_variable_declaration.hasVn():
             V_variable_declaration.empty()
-        self.run_declaration(V_variable_declaration)
         return self.checkEmpty(V_variable_declaration)
 
     # <init-declarator> ::= <identifier>[<initializer>]
@@ -436,7 +431,6 @@ class analyser:
             # 去符号表中找这个ID，找不到记得报错
             if var:
                 V_primary_expression.append(self.pointer)
-                self.getsym()
                 # 判断diff_level
                 if var.level == 0 and self.level != var.level:
                     self.emit(Instruction(Instruction.loada, 1, var.offset))
@@ -457,20 +451,20 @@ class analyser:
                 self.overlookToMarks(overlookset)
         #函数调用
         elif self.pointer.isID() and self.pointer.next.isL_Parenthesis():
-            symbolItem = self.symbolTable.getItem(self.pointer.text)
+            func = self.symbolTable.funcs[self.symbolTable.getFunc(self.pointer.text)]
             # 去符号表中找这个ID，找不到记得报错
-            if symbolItem:
-                if symbolItem.returnType == 5: #void型
+            if func:
+                if func.returntype == "VOID": #void型
                     self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not call a void function")
                     self.overlookToMarks(overlookset)
                 else:
                     V_primary_expression.append(self.function_call(overlookset))
-                    if symbolItem.returnType == 2:
+                    if func.returntype == "INT":
                         exp_type = "int"
                     else:
                         exp_type = "double"
             else:
-                self.error(Error.ST_UNDEFINED_ID, self.pointer)
+                self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not call this func")
                 self.overlookToMarks(overlookset)
         # 处理表达式
         elif self.pointer.isL_Parenthesis():
@@ -515,14 +509,10 @@ class analyser:
         V_function_call = VN.create(const.FUNC_CALL,self.level)
         func = self.pointer
         V_function_call.append(func)
-        symbolFunc = self.symbolTable.getItem(self.pointer.text)
+        symbolFunc = self.symbolTable.funcs[self.symbolTable.getFunc(func.text)]
         if not symbolFunc:
             self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not find this func")
             self.overlookToMarks(overlookset)
-        else:
-            if not symbolFunc.isFunction():
-                self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="it is not an func name")
-                self.overlookToMarks(overlookset)
         self.getsym()
         if self.pointer.isL_Parenthesis():
             V_function_call.append(self.pointer)
@@ -882,11 +872,11 @@ class analyser:
             id = self.pointer
             V_statement.append(self.function_call(sentenceOverlookSet))
             if self.pointer.isSemicolon():
-                func = self.symbolTable.getItem(id.text)
+                func = self.symbolTable.funcs[self.symbolTable.getFunc(id.text)]
                 if func:
-                    if func.returnType == 2:
+                    if func.returntype == "INT":
                         self.emit(Instruction(Instruction.pop))
-                    elif func.returnType == 8:
+                    elif func.returntype == "DOUBLE":
                         self.emit(Instruction(Instruction.pop2))
                 V_statement.append(self.pointer)
                 self.getsym()
@@ -1247,60 +1237,16 @@ class analyser:
             self.overlookToMarks(overlookSet)
         return V_assignment_expression
     # 语义分析
-    # <常/变量多重定义判断>
-    def run_declaration(self, Vn):
-        no = 0
-        if Vn.isEmpty():
-            return
-        for child in Vn.children:
-            if child.isType(const.INIT_DEC):
-                name = child.findChild(const.ID).text
-                if child.findChild(const.INIT):
-                    INIT = child.findChild(const.INIT)
-                    if INIT.findGrandChildren(const.INTEGER_LITERAL):
-                        value = INIT.findGrandChildren(const.INTEGER_LITERAL)[0].text
-                        no = self.symbolTable.addItem(name, value, SymbolTableItem.TYPE_INT)
-                    elif INIT.findGrandChildren(const.DOUBLE_LITERAL):
-                        value = INIT.findGrandChildren(const.DOUBLE_LITERAL)[0].text
-                        no = self.symbolTable.addItem(name, value, SymbolTableItem.TYPE_DOUBLE)
-                    elif INIT.findGrandChildren(const.CHAR_LITERAL):
-                        value = INIT.findGrandChildren(const.CHAR_LITERAL)[0].text
-                        no = self.symbolTable.addItem(name, value, SymbolTableItem.TYPE_CHAR)
-                    elif INIT.findGrandChildren(const.STRING_LITERAL):
-                        value = INIT.findGrandChildren(const.STRING_LITERAL)[0].text
-                        no = self.symbolTable.addItem(name, value, SymbolTableItem.TYPE_STRING)
-                    else:
-                        no = self.symbolTable.addItem(name, None, SymbolTableItem.TYPE_INT)
-                else:
-                    no = self.symbolTable.addItem(name, None, SymbolTableItem.TYPE_INT)
-                if no == -1:
-                    self.error(Error.ST_REPEATED_ID, self.pointer.previous, child.findChild(const.ID))
-    # 语义分析
     # <函数定义部分>
     def run_functionDefine(self, Vn):
-        '''
-        if self.hasError() or Vn.isEmpty():
-            return
-        '''
-        if Vn.isType(const.MAIN_FUNC):
-            if Vn.hasChild(const.VOID):
-                returnValue = SymbolTableItem.TYPE_VOID
-            else:
-                returnValue = SymbolTableItem.TYPE_INT
-            id = Vn.findChild(const.ID)
-        elif Vn.hasChild(const.VOID):
-            returnValue = SymbolTableItem.TYPE_VOID
-            id = Vn.findChild(const.ID)
-        else :
-            returnValue = SymbolTableItem.TYPE_INT
-            id = Vn.findChild(const.ID)
-        no = self.symbolTable.addItem(id.text, None, SymbolTableItem.TYPE_FUNCTION, returnValue)
+        if Vn.hasChild(const.VOID):
+            returnValue = "VOID"
+        elif Vn.hasChild(const.INT):
+            returnValue = "INT"
+        elif Vn.hasChild(const.DOUBLE):
+            returnValue = "DOUBLE"
+        id = Vn.findChild(const.ID)
         name = id.text
-        if no == -1:
-            self.error(Error.ST_REPEATED_ID, self.pointer.previous, id)
-            return
-        else:
-            self.symbolTable.addIndex(id.text)
         # 如果有参数表，记得加入参数到符号表中
         parameter = Vn.findChild(const.PARA_CLA)
         if parameter.hasChild(const.PARA_DEC_LIST):
@@ -1315,15 +1261,10 @@ class analyser:
                 elif id.previous.isR_Int():
                     paraslot += 1
                     para_list.append("int")
-            self.symbolTable.table[no].paraslot = paraslot
-            # 设置函数符号的变量个数
-            self.symbolTable.table[no].paraNum = len(ids)
-            for id in ids:
-                self.symbolTable.addItem(id.text, None, SymbolTableItem.TYPE_PARAMETER)
-            self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),paraslot,self.symbolTable.table[no].level,para_list))
+            self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),paraslot,parameter.level,para_list,returnValue))
         else:
             para_list = []
-            self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),0,parameter.level,para_list))
+            self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),0,parameter.level,para_list,returnValue))
             return
             
     # 语义分析

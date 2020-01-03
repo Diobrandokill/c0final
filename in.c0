@@ -1,3 +1,4 @@
+/*
 int e=2, UPPER=200;
 int power(int x) 
 {
@@ -28,4 +29,17 @@ void main()
      print("more than upper_line",test-UPPER);
    print("Now we test the nagtive-parameter:");
    print(power(-1));
+}
+*/
+double x;
+
+int fun(int num) {
+    int rtv = num/2;
+    return rtv+1;
+}
+
+void main() {
+    x = 7;
+    fun(x);
+    return;
 }

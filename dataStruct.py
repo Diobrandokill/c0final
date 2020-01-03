@@ -597,98 +597,16 @@ class InstructionStream():
                 # instruction.printMsg()
                 no += 1
 
-
-
-class SymbolTableIndex:
-    def __init__(self, name, level, itemNo):
-        self.name = name
-        self.level = level
-        self.itemNo = itemNo
-
-
-class SymbolTableItem:
-    TYPE_CONST = 1
-    TYPE_INT = 2
-    TYPE_FUNCTION = 3
-    TYPE_PARAMETER = 4
-    TYPE_VOID = 5
-    TYPE_STRING = 6
-    TYPE_CHAR = 7
-    TYPE_DOUBLE = 8
-    String = {
-        TYPE_CONST:"Const",
-        TYPE_INT:"Int",
-        TYPE_FUNCTION:"Function",
-        TYPE_PARAMETER:"Parameter",
-        TYPE_VOID:"Void",
-        TYPE_STRING:"String",
-        TYPE_CHAR:"Char",
-        TYPE_DOUBLE:"Double"
-    }
-
-    def __init__(self, name, value, level, itemType, no, returnValue = None, paraNum = 0, space = 0, constants = [], paraslot = 0):
-        self.name = name
-        # value对于普通变量就是值，对于函数指针就是代码段下标，
-        self.value = value
-        self.level = level
-        self.itemType = itemType
-        self.no = no
-        # 函数类型需要的参数数量
-        self.paraNum = paraNum
-        self.paraslot = paraslot
-        # 函数类型需要的定长空间
-        self.space = space
-        self.constants = constants
-        # returnType对于普通变量等于itemType,对于函数变量等于返回值类型
-        if self.itemType != SymbolTableItem.TYPE_FUNCTION:
-            self.returnType = itemType
-        else:
-            self.returnType = returnValue
-        # 为变量分配地址
-    def isConst(self):
-        return self.itemType == SymbolTableItem.TYPE_CONST
-    def isInt(self):
-        return self.itemType == SymbolTableItem.TYPE_INT
-    def isParameter(self):
-        return self.itemType == SymbolTableItem.TYPE_PARAMETER
-    def isFunction(self):
-        return self.itemType == SymbolTableItem.TYPE_FUNCTION
-    def setValue(self, value):
-        self.value = value
-
-
 class SymbolTable():
     def __init__(self):
         self.level = 1
-        self.index = []
-        self.table = []
         self.constant = []
         self.var = []
         self.funcs = []
         self.no = -1
         self.offset = [0] * 100
         # 加入“program”索引
-        self.index.append(SymbolTableIndex('C0program', self.level, 0))
-    def addIndex(self, name):
-        self.level += 1
-        self.index.append(SymbolTableIndex(name, self.level, self.no + 1))
-    def addItem(self, name, value, itemType, returnValue = None , constants = []):
-        aSameItem = self.getItem(name)
-        # 如果未找到同层变量，定义！
-        if aSameItem is None or aSameItem.level != self.level:
-            self.no += 1
-            self.table.append(SymbolTableItem(name, value, self.level, itemType, self.no, returnValue, constants))
-            return self.no
-        # 否则即为找到同层定义，返回-1报错！
-        elif aSameItem.level == self.level:
-            return -1
-    def getItem(self, name):
-        present = self.no
-        while present >= 0:
-            if self.table[present].name == name:
-                return self.table[present]
-            present -= 1
-        return None
+        #self.index.append(SymbolTableIndex('C0program', self.level, 0))
     def getVar(self,name):
         for i in range(0,len(self.var)):
             if self.var[i].value == name:
@@ -704,13 +622,6 @@ class SymbolTable():
             if self.funcs[i].name == name:
                 return i
         return None 
-    def getItemIndex(self,name):
-        present = self.no
-        while present >= 0:
-            if self.table[present].name == name:
-                return present
-            present -= 1
-        return None
     def print_const_Table(self,file):
         file.write(".constants:" + '\n')
         for i in range(0,len(self.constant)):
@@ -739,12 +650,13 @@ class tableitem: #var or constant
         self.flag = flag #判断是否是const
 
 class func:
-    def __init__(self,name, number, slot,level,para):
+    def __init__(self,name, number, slot,level,para,returntype):
         self.number = number
         self.name = name
         self.slot = slot
         self.level = level
         self.para = para
+        self.returntype = returntype
 
 class Error:
     # Error类型定义
