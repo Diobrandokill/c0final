@@ -10,7 +10,7 @@ import argparse
 import struct
 import os 
 import test
-'''
+
 # debugging
 infile = open("in.c0",'r')
 TK = tokennizer(infile)
@@ -30,7 +30,7 @@ AN.scan()
 #打印语法及语义分析错误
 for error in AN.errors:
     error.printMsg()
-'''
+
 
 def to_utf(number):
     return  chr(int(number,16))
@@ -131,13 +131,13 @@ if __name__ == "__main__":
     else:
         infile = open("in.c0",'r')
 
-    tmpfile = open("tmp.s0","w")
-    outtext(infile,tmpfile)
+    #tmpfile = open("tmp.s0","w")
+    #outtext(infile,tmpfile)
 
     if args.o:
         outfile = open(args.o,'w')
     else:
-        outfile = open("out.o0",'w')
+        outfile = open("out",'w')
 
     if args.c:
         if args.o:
@@ -152,7 +152,8 @@ if __name__ == "__main__":
             tmpfile.close()
             os.system('./c0-vm-cpp -a tmp.s0 tmp.o0')
             os.remove('./tmp.s0')
-    if args.s:
+    elif args.s:
         outtext(infile,outfile)
 
-
+    infile.close()
+    outfile.close()

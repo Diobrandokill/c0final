@@ -222,13 +222,6 @@ class analyser:
             self.getsym()
             # 去符号表中找这个ID，找不到记得报错
             if self.pointer.isAssign():
-                '''
-                if var:
-                    if var.level == 0 and self.level != var.level:
-                        self.emit(Instruction(Instruction.loada, 1, var.offset))
-                    else:
-                        self.emit(Instruction(Instruction.loada, 0, var.offset))
-                '''
                 init,init_type = self.initializer(overlookSet)
                 V_init_declarator.append(init)
                 
@@ -242,6 +235,11 @@ class analyser:
                     self.error(Error.AN_MISS_ASSIGN, self.pointer.previous, "Gramma Analysis Error: A \'=\'  is expected in const variables\' defination  .")
                     self.overlookToMarks(overlookSet)
                     V_init_declarator.empty()
+                else:
+                    if type == 1:
+                        self.emit(Instruction(Instruction.snew,2))
+                    else:
+                        self.emit(Instruction(Instruction.snew,1))
         else :
             self.error(Error.AN_MISS_IDENTIFIER,self.pointer.previous)
             self.overlookToMarks(overlookSet)
@@ -269,11 +267,11 @@ class analyser:
             sign = self.pointer
             V_expression.append(sign)
             # 加一个方便定位的指令 后面要删去
-            self.emit(Instruction(Instruction.iadd))
+            self.emit(Instruction(Instruction.nop))
             self.getsym()
             tmp_mul,tmp_exp_type = self.multiplicative_expression(overlookset)
             for index in range(len(self.instructionStream.instructions)-1,-1,-1):
-                if self.instructionStream.instructions[index].instruction == Instruction.iadd:
+                if self.instructionStream.instructions[index].instruction == Instruction.nop:
                     break
             if tmp_exp_type == "double" and exp_type == "int":
                 self.instructionStream.instructions[index] = Instruction(Instruction.i2d)
@@ -319,11 +317,11 @@ class analyser:
             sign = self.pointer
             V_multiplicative_expression.append(sign)
              # 加一个方便定位的指令 后面要删去
-            self.emit(Instruction(Instruction.imul))
+            self.emit(Instruction(Instruction.nop))
             self.getsym()
             tmp_cast,tmp_exp_type = self.cast_expression(overlookset)
             for index in range(len(self.instructionStream.instructions)-1,-1,-1):
-                if self.instructionStream.instructions[index].instruction == Instruction.imul:
+                if self.instructionStream.instructions[index].instruction == Instruction.nop:
                     break
             if tmp_exp_type == "double" and exp_type == "int":
                 self.instructionStream.instructions[index] = Instruction(Instruction.i2d)
@@ -371,23 +369,29 @@ class analyser:
                 sign = "int"
             elif self.pointer.isR_Double():
                 sign = "double"
-            elif self.pointer.isID():
+            elif self.pointer.isID(): #如果是ID就说明没有cast，直接进unary-expression
                 self.pointer = l
-            else:
-                self.error(Error.AN_MISS_TYPE,self.pointer.previous)
+            elif self.pointer.isR_Void():
+                self.error(Error.AN_ILLEGAL_TYPE,self.pointer,msg="cast can not be void ")
                 self.overlookToMarks(overlookset)
-            if not sign == "":
-                m = self.pointer
+            else:
+                self.error(Error.AN_MISS_TYPE,self.pointer,msg="missing a cast type")
+                self.overlookToMarks(overlookset)
+        #sign有东西就存
+        if not sign == "":
+            m = self.pointer
+            self.getsym()
+            if not self.pointer.isR_Parenthesis():
+                self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
+                self.overlookToMarks(overlookset)
+            else:
+                V_cast_expression.append(l)            #左括号
+                V_cast_expression.append(m)            #类型
+                V_cast_expression.append(self.pointer) #右括号
                 self.getsym()
-                if not self.pointer.isR_Parenthesis():
-                    self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
-                    self.overlookToMarks(overlookset)
-                else:
-                    V_cast_expression.append(l)
-                    V_cast_expression.append(m)
-                    V_cast_expression.append(self.pointer)
         unary,exp_type = self.unary_expression(overlookset)
         V_cast_expression.append(unary)
+        #sign有东西就转换
         if sign == "double" and exp_type == "int":
             self.emit(Instruction(Instruction.i2d))
         elif sign == "int" and exp_type == "double":
@@ -1262,12 +1266,14 @@ class analyser:
                     no = self.symbolTable.addItem(name, None, SymbolTableItem.TYPE_INT)
                 if no == -1:
                     self.error(Error.ST_REPEATED_ID, self.pointer.previous, child.findChild(const.ID))
+        '''为没有初始化的变量留个空间
         if not Vn.hasGrandChild(const.ASSIGN) or not Vn.hasGrandChild(const.EXP):
             #if self.symbolTable.getItem(Vn.findChild(const.INIT_DEC).findChild(const.ID).text).level == 1:
             if Vn.hasChild(const.DOUBLE) and not Vn.hasChild(const.ASSIGN):
                 self.emit(Instruction(Instruction.snew,2))
             elif Vn.hasChild(const.INT) and not Vn.hasChild(const.ASSIGN):
                 self.emit(Instruction(Instruction.snew,1))
+        '''
     # 语义分析
     # <函数定义部分>
     def run_functionDefine(self, Vn):

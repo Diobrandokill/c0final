@@ -156,7 +156,7 @@ class tokennizer:
         return self.char == ''
     # 判断是否合法字符
     def islegal(self):
-        if ord(self.char) in range(33,127):
+        if ord(self.char) in range(32,127):
             return True
         else:
             return False
@@ -376,6 +376,7 @@ class tokennizer:
                     self.catToken()
                     self.getchar()
                     if not self.islegal():
+                        print(ord(self.char))
                         self.error(Error.TK_ILLEGAL_INPUT, "Word Analysis Error: Unrecognized Char.")
                         self.inError = True
                         break
