@@ -368,14 +368,11 @@ class analyser:
                 sign = "int"
             elif self.pointer.isR_Double():
                 sign = "double"
-            elif self.pointer.isID(): #如果是ID就说明没有cast，直接进unary-expression
-                self.pointer = l
             elif self.pointer.isR_Void():
                 self.error(Error.AN_ILLEGAL_TYPE,self.pointer,msg="cast can not be void ")
                 self.overlookToMarks(overlookset)
-            else:
-                self.error(Error.AN_MISS_TYPE,self.pointer,msg="missing a cast type")
-                self.overlookToMarks(overlookset)
+            else: #否则就说明没有cast，直接进unary-expression
+                self.pointer = l
         #sign有东西就存
         if not sign == "":
             m = self.pointer

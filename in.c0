@@ -1,4 +1,3 @@
-/*
 int e=2, UPPER=200;
 int power(int x) 
 {
@@ -30,7 +29,7 @@ void main()
    print("Now we test the nagtive-parameter:");
    print(power(-1));
 }
-*/
+/*
 double x;
 
 int fun(int num) {
@@ -43,3 +42,4 @@ void main() {
     fun(x);
     return;
 }
+*/
