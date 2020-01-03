@@ -134,11 +134,15 @@ class analyser:
         # 进入函数的时候已经检验了存在 const标识符,不用重复检查
         V_const_declaration.append(self.pointer)
         self.getsym()
-        V_const_declaration.append(self.pointer)
         if self.pointer.isR_Double():
             var_type = 1
+            V_const_declaration.append(self.pointer)
         elif self.pointer.isR_Int():
             var_type = 0 
+            V_const_declaration.append(self.pointer)
+        else:
+            self.error(Error.AN_ILLEGAL_INPUT,self.pointer.previous,msg = "type should be int or double")
+            self.overlookToMarks(overlookSet)
         self.getsym()
         init_dec,init_type = self.init_declarator(downoverlookSet,flag=1,type = var_type)
         V_const_declaration.append(init_dec)
@@ -155,6 +159,7 @@ class analyser:
             # 如果没有分号，报错！但是别多读一个了
             # 已经读的仍然保留
             self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
+            self.overlookToMarks(overlookSet)
         # 防止只有 const 保留字和/或 ; 被读入了
         if not V_const_declaration.hasVn():
             V_const_declaration.empty()
@@ -492,7 +497,7 @@ class analyser:
         # 处理浮点型字面量
         elif self.pointer.isDouble():
             V_primary_expression.append(self.pointer)
-            if not self.symbolTable.isuniquq(self.pointer.text):
+            if not self.symbolTable.isunique(self.pointer.text):
                 self.symbolTable.constant.append(tableitem('D',self.pointer.text,V_primary_expression.level,0,0))
             self.emit(Instruction(Instruction.loadc, self.symbolTable.getConstant_by_value(self.pointer.text)))
             exp_type = "double"
@@ -609,7 +614,7 @@ class analyser:
             if(self.pointer.isID()):
                 V_function_definition.append(self.pointer)
                 self.pointer.level = self.level
-                if not self.symbolTable.isuniquq(self.pointer.text[1:-1]) :
+                if not self.symbolTable.isunique(self.pointer.text[1:-1]) :
                     self.symbolTable.constant.append(tableitem('S',self.pointer.text,self.pointer.level,0,0))
                 self.getsym()
             else:
@@ -625,7 +630,7 @@ class analyser:
                 V_function_definition.append(void)
                 self.pointer.level = self.level
                 id = self.pointer
-                if not self.symbolTable.isuniquq(self.pointer.text[1:-1]) :
+                if not self.symbolTable.isunique(self.pointer.text[1:-1]) :
                     self.symbolTable.constant.append(tableitem('S',self.pointer.text,self.pointer.level,0,0))
                 V_function_definition.append(self.pointer)
                 self.getsym()
@@ -1184,7 +1189,7 @@ class analyser:
     def printable(self,overlookSet):
         V_printable = VN.create(const.PRINTABLE,self.level)
         if self.pointer.isString():
-            if not self.symbolTable.isuniquq(self.pointer.text[1:-1]) :
+            if not self.symbolTable.isunique(self.pointer.text[1:-1]) :
                 self.symbolTable.constant.append(tableitem('S',self.pointer.text[1:-1],self.pointer.level,0,0))
             self.emit(Instruction(Instruction.loadc,self.symbolTable.getConstant_by_value(self.pointer.text[1:-1])))
             self.emit(Instruction(Instruction.sprint))
@@ -1270,14 +1275,6 @@ class analyser:
                     no = self.symbolTable.addItem(name, None, SymbolTableItem.TYPE_INT)
                 if no == -1:
                     self.error(Error.ST_REPEATED_ID, self.pointer.previous, child.findChild(const.ID))
-        '''为没有初始化的变量留个空间
-        if not Vn.hasGrandChild(const.ASSIGN) or not Vn.hasGrandChild(const.EXP):
-            #if self.symbolTable.getItem(Vn.findChild(const.INIT_DEC).findChild(const.ID).text).level == 1:
-            if Vn.hasChild(const.DOUBLE) and not Vn.hasChild(const.ASSIGN):
-                self.emit(Instruction(Instruction.snew,2))
-            elif Vn.hasChild(const.INT) and not Vn.hasChild(const.ASSIGN):
-                self.emit(Instruction(Instruction.snew,1))
-        '''
     # 语义分析
     # <函数定义部分>
     def run_functionDefine(self, Vn):

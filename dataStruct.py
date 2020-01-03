@@ -666,7 +666,7 @@ class SymbolTable():
         self.var = []
         self.funcs = []
         self.no = -1
-        self.offset = [0,0,0,0,0,0,0,0,0,0]
+        self.offset = [0] * 100
         # 加入“program”索引
         self.index.append(SymbolTableIndex('C0program', self.level, 0))
     def addIndex(self, name):
@@ -711,22 +711,6 @@ class SymbolTable():
                 return present
             present -= 1
         return None
-    '''
-    # 收起指定函数下的符号，同时设置函数项 space 字段，此后level - 1
-    # 同时index弹出一项
-    def collapseToFunction(self, funcName):
-        funcItem = self.getItem(funcName)
-        if not funcItem.isFunction():
-            return
-        start = funcItem.no
-        for i in range(0, self.no - start):
-            self.table.pop()
-        # 设置space字段，因为有返回地址，所以要 + 1
-        funcItem.space = self.no - start + 1
-        self.no = start
-        self.level -= 1
-        self.index.pop()
-    '''
     def print_const_Table(self,file):
         file.write(".constants:" + '\n')
         for i in range(0,len(self.constant)):
@@ -746,7 +730,7 @@ class SymbolTable():
         return 0 
 
 
-class tableitem:
+class tableitem: #var or constant
     def __init__(self, itype, value,level,offset,flag):
         self.type = itype
         self.value = value
