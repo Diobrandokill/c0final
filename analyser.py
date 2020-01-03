@@ -76,7 +76,6 @@ class analyser:
         overlookSet = [const.CONST, const.INT, const.VOID]
         V_program = VN.create(const.C0PROGRAM,self.level)
         flag = 0
-        # 当没有检测到主函数时，执行此无限循环
         while True:
             # 如果是const，<常量分析>
             if self.pointer.isR_Const():
@@ -108,8 +107,8 @@ class analyser:
                         V_program.append(self.variable_declaration(overlookSet))
                 # ID都识别不出来，那只有一个int头，交给变量定义吧
                 else :
-                    self.setsymat(tempPointer)
-                    V_program.append(self.variable_declaration(overlookSet))
+                    self.error(Error.AN_ILLEGAL_INPUT,self.pointer.previous,msg="missing identifier")
+                    self.overlookToMarks(overlookSet)
             # 因为文件终结符而结束
             elif self.isEnd():
                 break
@@ -121,7 +120,6 @@ class analyser:
             self.error(Error.AN_MISS_MAIN_FUNCTION,self.pointer.previous)
         return V_program
 
-    #<variable-declaration> ::= <type-specifier><init-declarator-list>';'
     #<const-declaration> ::= <const-qualifier><type-specifier><init-declarator-list>';'
     #<init-declarator-list> ::= <init-declarator>{','<init-declarator>}
     # type : int -> 0 , double -> 1
@@ -163,6 +161,7 @@ class analyser:
         self.run_declaration(V_const_declaration)
         return self.checkEmpty(V_const_declaration)
 
+    #<variable-declaration> ::= <type-specifier><init-declarator-list>';'
     def variable_declaration(self, overlookSet=None):
         var_type = 0
         if overlookSet is None:
