@@ -438,21 +438,26 @@ class analyser:
                     self.emit(Instruction(Instruction.loada, 1, var.offset))
                 else:
                     self.emit(Instruction(Instruction.loada, 0, var.offset))
+
                 if var.type == "double":
                     self.emit(Instruction(Instruction.dload))
                 elif var.type == "int":
                     self.emit(Instruction(Instruction.iload))
+                else:
+                    self.error(Error.AN_ILLEGAL_TYPE, self.pointer,msg = "can not load void var")
+                    self.overlookToMarks(overlookset)
+                self.getsym()
                 exp_type = var.type
             else:
-                self.error(Error.ST_UNDEFINED_ID, self.pointer.previous)
+                self.error(Error.ST_UNDEFINED_ID, self.pointer)
                 self.overlookToMarks(overlookset)
         #函数调用
         elif self.pointer.isID() and self.pointer.next.isL_Parenthesis():
             symbolItem = self.symbolTable.getItem(self.pointer.text)
             # 去符号表中找这个ID，找不到记得报错
             if symbolItem:
-                if symbolItem.returnType == 5:
-                    self.error(Error.ST_UNDEFINED_ID, self.pointer.previous)
+                if symbolItem.returnType == 5: #void型
+                    self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not call a void function")
                     self.overlookToMarks(overlookset)
                 else:
                     V_primary_expression.append(self.function_call(overlookset))
@@ -461,7 +466,7 @@ class analyser:
                     else:
                         exp_type = "double"
             else:
-                self.error(Error.ST_UNDEFINED_ID, self.pointer.previous)
+                self.error(Error.ST_UNDEFINED_ID, self.pointer)
                 self.overlookToMarks(overlookset)
         # 处理表达式
         elif self.pointer.isL_Parenthesis():
@@ -475,28 +480,26 @@ class analyser:
             else:
                 self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
                 self.overlookToMarks(overlookset)
+        # 处理整型字面量
         elif self.pointer.isInteger() or self.pointer.isHex():
             V_primary_expression.append(self.pointer)
-            if not self.symbolTable.isuniquq(self.pointer.text) :
+            # 直接加到符号表
+            if not self.symbolTable.isunique(self.pointer.text) :
                 self.symbolTable.constant.append(tableitem('I',self.pointer.text,V_primary_expression.level,0,0))
-            if self.symbolTable.getConstant_by_value(self.pointer.text) == None:
-                self.emit(Instruction(Instruction.ipush, self.pointer.text))
-            else:
-                self.emit(Instruction(Instruction.loadc, self.symbolTable.getConstant_by_value(self.pointer.text)))
+            # 因为上面加了，所以全是loadc就行
+            self.emit(Instruction(Instruction.loadc, self.symbolTable.getConstant_by_value(self.pointer.text)))
             exp_type = "int"
             self.getsym()
+        # 处理浮点型字面量
         elif self.pointer.isDouble():
             V_primary_expression.append(self.pointer)
             if not self.symbolTable.isuniquq(self.pointer.text):
                 self.symbolTable.constant.append(tableitem('D',self.pointer.text,V_primary_expression.level,0,0))
-            if self.symbolTable.getConstant_by_value(self.pointer.text) == None:
-                self.emit(Instruction(Instruction.ipush, self.pointer.text))
-            else:
-                self.emit(Instruction(Instruction.loadc, self.symbolTable.getConstant_by_value(self.pointer.text)))
+            self.emit(Instruction(Instruction.loadc, self.symbolTable.getConstant_by_value(self.pointer.text)))
             exp_type = "double"
             self.getsym()
         else:
-            self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous, "Gramma Analysis Error: An expression, id, or integer is expeted")
+            self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous, "Gramma Analysis Error: An expression, (exp), or integer or double or func or id is expeted")
             self.overlookToMarks(overlookset)
         return self.checkEmpty(V_primary_expression),exp_type
 
@@ -510,11 +513,11 @@ class analyser:
         V_function_call.append(func)
         symbolFunc = self.symbolTable.getItem(self.pointer.text)
         if not symbolFunc:
-            self.error(Error.ST_UNDEFINED_ID, self.pointer.previous)
+            self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not find this func")
             self.overlookToMarks(overlookset)
         else:
             if not symbolFunc.isFunction():
-                self.error(Error.ST_UNDEFINED_ID, self.pointer.previous)
+                self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="it is not an func name")
                 self.overlookToMarks(overlookset)
         self.getsym()
         if self.pointer.isL_Parenthesis():
@@ -535,13 +538,13 @@ class analyser:
             if self.pointer.isR_Parenthesis():
                 V_function_call.append(self.pointer)
                 self.getsym()
+                self.emit(Instruction(Instruction.call,self.symbolTable.getFunc(func.text)))
             else:
                 self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
                 self.overlookToMarks(overlookset)
         else:
             self.error(Error.AN_MISS_L_PARENTHESIS, self.pointer.previous)
             self.overlookToMarks(overlookset)
-        self.emit(Instruction(Instruction.call,self.symbolTable.getFunc(func.text)))
         return V_function_call 
 
     # <expression-list> ::= 
@@ -549,45 +552,47 @@ class analyser:
     def expression_list(self, overlookSet = [const.R_PARENTHESIS]):
         num = 0
         downOverlookSet = overlookSet[:]
+        # id为函数名字
+        id = self.pointer.previous.previous
         self.overlookSetAdd(downOverlookSet, const.COMMA)
         V_expression_list = VN.create(const.EXP_LIST,self.level)
         exp,exp_type = self.expression(downOverlookSet)
-        # id为函数名字
-        id = self.pointer.previous.previous.previous
+        # 找到符号表中的函数item
         for func in self.symbolTable.funcs:
             if func.name == id.text:
                 break
         if len(func.para) > 0:
             if func.para[num] == "int" and exp_type == "double":
-                for i in range(len(self.instructionStream.instructions)-1,-1,-1):
-                        if self.instructionStream.instructions[i].instruction == Instruction.loada:
-                            self.emit(Instruction(Instruction.d2i))
-                            num += 1
-                            break
+                self.emit(Instruction(Instruction.d2i))
+                num += 1
             elif func.para[num] == "double" and exp_type == "int":
-                for i in range(len(self.instructionStream.instructions)-1,-1,-1):
-                        if self.instructionStream.instructions[i].instruction == Instruction.loada:
-                            self.emit(Instruction(Instruction.i2d))
-                            num += 1
-                            break
+                self.emit(Instruction(Instruction.i2d))
+                num += 1
+            else:
+                num += 1
+        # 如果没有参数报错
+        else:
+            self.error(Error.AN_ILLEGAL_INPUT, id.next,msg="func don't have so much para")
+            self.overlookToMarks(overlookSet)
         V_expression_list.append(exp)
         while self.pointer.isComma():
             V_expression_list.append(self.pointer)
             self.getsym()
             exp,exp_type = self.expression(downOverlookSet)
-            if func.para[num] == "int" and exp_type == "double":
-                for i in range(len(self.instructionStream.instructions)-1,-1,-1):
-                    if self.instructionStream.instructions[i].instruction == Instruction.loada:
-                        self.emit(Instruction(Instruction.d2i))
-                        num += 1
-                        break
-            elif func.para[num] == "double" and exp_type == "int":
-                for i in range(len(self.instructionStream.instructions)-1,-1,-1):
-                        if self.instructionStream.instructions[i].instruction == Instruction.loada:
-                            self.emit(Instruction(Instruction.i2d))
-                            num += 1
-                            break
-            V_expression_list.append(exp)
+            if num < len(func.para):
+                if func.para[num] == "int" and exp_type == "double":
+                    self.emit(Instruction(Instruction.d2i))
+                    num += 1
+                elif func.para[num] == "double" and exp_type == "int":
+                    self.emit(Instruction(Instruction.i2d))
+                    num += 1
+                else:
+                    num += 1
+                V_expression_list.append(exp)
+            else:
+                self.error(Error.AN_ILLEGAL_INPUT, id.next,msg="func don't have so much para")
+                self.overlookToMarks(overlookSet)
+
         return self.checkEmpty(V_expression_list)
 
     # <function-definition> ::= 

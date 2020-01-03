@@ -739,7 +739,7 @@ class SymbolTable():
         file.write(".functions:" + '\n')
         for i in range(0,len(self.funcs)):
             file.write("%-3s%-3s%-3s%-3s"%(i ,self.funcs[i].number, self.funcs[i].slot, self.funcs[i].level) + '\n') 
-    def isuniquq(self,name):
+    def isunique(self,name):
         for i in self.constant:
             if i.value == name:
                 return 1
