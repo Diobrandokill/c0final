@@ -123,7 +123,7 @@ class analyser:
                 break
             # 什么都识别不出来，只有报错跳过了
             else:
-                self.error(Error.AN_ILLEGAL_INPUT,self.pointer.previous)
+                self.error(Error.AN_ILLEGAL_INPUT,self.pointer)
                 self.overlookToMarks(overlookSet)
         if not flag == 1:
             self.error(Error.AN_MISS_MAIN_FUNCTION,self.pointer.previous)
@@ -237,14 +237,26 @@ class analyser:
             self.getsym()
             # 去符号表中找这个ID，找不到记得报错
             if self.pointer.isAssign():
+                if type == 1:
+                    self.emit(Instruction(Instruction.snew,2))
+                else:
+                    self.emit(Instruction(Instruction.snew,1))
+                if var.level == 0 and self.level != var.level:
+                    self.emit(Instruction(Instruction.loada, 1, var.offset))
+                else:
+                    self.emit(Instruction(Instruction.loada, 0, var.offset))
                 init,init_type = self.initializer(overlookSet)
                 V_init_declarator.append(init)
-                
                 if type == 1 and not init_type == "double":
                     self.emit(Instruction(Instruction.i2d))
+                    self.emit(Instruction.dstore)
                 elif type == 0 and init_type == "double":
                     self.emit(Instruction(Instruction.d2i))
-                
+                    self.emit(Instruction(Instruction.istore))
+                elif type == 0 and init_type == "int":
+                    self.emit(Instruction(Instruction.istore))
+                elif type == 1 and init_type == "double":
+                    self.emit(Instruction(Instruction.dstore))
             else :
                 if flag == 1 :
                     self.error(Error.AN_MISS_ASSIGN, self.pointer.previous, "Gramma Analysis Error: A \'=\'  is expected in const variables\' defination  .")
@@ -294,7 +306,7 @@ class analyser:
                     self.emit(Instruction(Instruction.dadd))
                 elif sign.vtype == const.MINUS:
                     self.emit(Instruction(Instruction.dsub))
-                exp_type == "double"
+                exp_type = "double"
             elif tmp_exp_type == "int" and exp_type == "double":
                 del self.instructionStream.instructions[index]
                 self.emit(Instruction(Instruction.i2d))
@@ -302,21 +314,21 @@ class analyser:
                     self.emit(Instruction(Instruction.dadd))
                 elif sign.vtype == const.MINUS:
                     self.emit(Instruction(Instruction.dsub))
-                exp_type == "double"
+                exp_type = "double"
             elif tmp_exp_type == "int" and exp_type == "int":
                 del self.instructionStream.instructions[index]
                 if sign.vtype == const.PLUS:
                     self.emit(Instruction(Instruction.iadd))
                 elif sign.vtype == const.MINUS:
                     self.emit(Instruction(Instruction.isub))
-                exp_type == "int"
+                exp_type = "int"
             elif tmp_exp_type == "double" and exp_type == "double":  
                 del self.instructionStream.instructions[index]
                 if sign.vtype == const.PLUS:
                     self.emit(Instruction(Instruction.dadd))
                 elif sign.vtype == const.MINUS:
                     self.emit(Instruction(Instruction.dsub))
-                exp_type == "double"
+                exp_type = "double"
             V_expression.append(tmp_mul)
             
         return self.checkEmpty(V_expression),exp_type
@@ -344,7 +356,7 @@ class analyser:
                     self.emit(Instruction(Instruction.ddiv))
                 elif sign.vtype == const.STAR:
                     self.emit(Instruction(Instruction.dmul))
-                exp_type == "double"
+                exp_type = "double"
             elif tmp_exp_type == "int" and exp_type == "double":
                 del self.instructionStream.instructions[index]
                 self.emit(Instruction(Instruction.i2d))
@@ -352,21 +364,21 @@ class analyser:
                     self.emit(Instruction(Instruction.ddiv))
                 elif sign.vtype == const.STAR:
                     self.emit(Instruction(Instruction.dmul))
-                exp_type == "double"
+                exp_type = "double"
             elif tmp_exp_type == "int" and exp_type == "int":
                 del self.instructionStream.instructions[index]
                 if sign.vtype == const.SLASH:
                     self.emit(Instruction(Instruction.idiv))
                 elif sign.vtype == const.STAR:
                     self.emit(Instruction(Instruction.imul))
-                exp_type == "int"
+                exp_type = "int"
             elif tmp_exp_type == "double" and exp_type == "double":  
                 del self.instructionStream.instructions[index]
                 if sign.vtype == const.SLASH:
                     self.emit(Instruction(Instruction.ddiv))
                 elif sign.vtype == const.STAR:
                     self.emit(Instruction(Instruction.dmul))
-                exp_type == "double"
+                exp_type = "double"
             V_multiplicative_expression.append(tmp_cast)
         return self.checkEmpty(V_multiplicative_expression),exp_type
             
@@ -464,9 +476,9 @@ class analyser:
                 self.overlookToMarks(overlookset)
         #函数调用
         elif self.pointer.isID() and self.pointer.next.isL_Parenthesis():
-            func = self.symbolTable.funcs[self.symbolTable.getFunc(self.pointer.text)]
-            # 去符号表中找这个ID，找不到记得报错
-            if func:
+            funcnum = self.symbolTable.getFunc(self.pointer.text)
+            if not funcnum == None:
+                func = self.symbolTable.funcs[funcnum]
                 if func.returntype == "VOID": #void型
                     self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not call a void function")
                     self.overlookToMarks(overlookset)
@@ -766,10 +778,10 @@ class analyser:
         if self.pointer.isID() or self.pointer.isL_Brace() \
             or self.pointer.isR_If() or self.pointer.isR_While() \
             or self.pointer.isR_Return() or self.pointer.isR_Print() \
-            or self.pointer.isR_Scan():
+            or self.pointer.isR_Scan() or self.pointer.isSemicolon():
             V_compound_statement.append(self.statement_seq(downOverlookSet))
         else:
-            self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous)
+            self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous,msg="missing statement-seq")
             self.overlookToMarks(selfOverlookSet)
         # 复合语句的最后，因该是一个}，无则报错
         if self.pointer.isR_Brace():
@@ -795,7 +807,7 @@ class analyser:
         while self.pointer.isID() or self.pointer.isR_If() \
             or self.pointer.isR_While() or self.pointer.isR_Return() \
             or self.pointer.isL_Brace() or self.pointer.isR_Scan() \
-            or self.pointer.isR_Print():
+            or self.pointer.isR_Print() or self.pointer.isSemicolon():
             if self.pointer.isR_Return():
                 V_statement_seq.append(self.statement(downOverlookSet))
                 marks = [const.R_BRACE]
@@ -856,6 +868,7 @@ class analyser:
                 self.overlookToMarks(overlookSet)
         # 全都不是，但是是个id，报错
         elif self.pointer.isSemicolon():
+            V_statement.append(self.pointer)
             self.getsym()
         else:
             self.error(Error.AN_ILLEGAL_INPUT)
@@ -969,20 +982,20 @@ class analyser:
             V_condition.append(exp)
             if tmp_exp_type == "int" and exp_type == "double":
                 self.instructionStream.instructions[index] = Instruction(Instruction.i2d)
-                exp_type == "double"
+                exp_type = "double"
                 self.emit(Instruction(Instruction.dcmp))
             elif tmp_exp_type == "double" and exp_type == "int":
                 del self.instructionStream.instructions[index]
                 self.emit(Instruction(Instruction.i2d))
-                exp_type == "double"
+                exp_type = "double"
                 self.emit(Instruction(Instruction.dcmp))
             elif tmp_exp_type == "int" and exp_type == "int":
                 del self.instructionStream.instructions[index]
-                exp_type == "int"
+                exp_type = "int"
                 self.emit(Instruction(Instruction.icmp))
             elif tmp_exp_type == "double" and exp_type == "double":  
                 del self.instructionStream.instructions[index]
-                exp_type == "double"
+                exp_type = "double"
                 self.emit(Instruction(Instruction.dcmp))
         else:
             del self.instructionStream.instructions[index]
@@ -1057,10 +1070,14 @@ class analyser:
                 self.emit(Instruction(Instruction.dret))
             else:
                 self.emit(Instruction(Instruction.iret))
-        if not self.pointer.isSemicolon():
-            self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
-            self.overlookToMarks(overlookSet)
+            if not self.pointer.isSemicolon():
+                self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
+                self.overlookToMarks(overlookSet)
+            else:
+                V_return_statement.append(self.pointer)
+                self.getsym()
         else:
+            V_return_statement.append(self.pointer)
             self.emit(Instruction(Instruction.ret))
             self.getsym()
         return V_return_statement
@@ -1290,22 +1307,31 @@ class analyser:
                 if not sentence.findChild(const.RET_STATE) is None:
                     ret = True
                     break
-            if not ret:
-                self.emit(Instruction(Instruction.ret))
-            #隐式转换返回类型
-            early = self.instructionStream.instructions.pop() #double or int
-            if returnValue == const.INT and early.instruction == Instruction.dret:
-                self.emit(Instruction(Instruction.d2i))
-                self.emit(Instruction(Instruction.iret))
-            elif returnValue == const.INT and early.instruction == Instruction.iret:
-                self.emit(Instruction(Instruction.iret))
-            elif returnValue == const.DOUBLE and early.instruction == Instruction.iret:
-                self.emit(Instruction(Instruction.i2d))
-                self.emit(Instruction(Instruction.dret))
-            elif returnValue == const.DOUBLE and early.instruction == Instruction.dret:
-                self.emit(Instruction(Instruction.dret))
-            elif early.instruction == Instruction.ret:
-                self.emit(Instruction(Instruction.ret))
+            if ret == False:
+                if returnValue == const.VOID:
+                    self.emit(Instruction(Instruction.ret))
+                else:
+                    self.error(Error.AN_MISS_RET_STATEMENT, self.pointer.previous)
+            else:
+                #隐式转换返回类型
+                early = self.instructionStream.instructions.pop() #double or int
+                if returnValue == const.INT and early.instruction == Instruction.dret:
+                    self.emit(Instruction(Instruction.d2i))
+                    self.emit(Instruction(Instruction.iret))
+                elif returnValue == const.INT and early.instruction == Instruction.iret:
+                    self.emit(Instruction(Instruction.iret))
+                elif returnValue == const.DOUBLE and early.instruction == Instruction.iret:
+                    self.emit(Instruction(Instruction.i2d))
+                    self.emit(Instruction(Instruction.dret))
+                elif returnValue == const.DOUBLE and early.instruction == Instruction.dret:
+                    self.emit(Instruction(Instruction.dret))
+                elif early.instruction == Instruction.ret:
+                    self.emit(Instruction(Instruction.ret))
+
+                if returnValue == const.VOID and not early.instruction == Instruction.ret:
+                    self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous,msg="can not return value in a void func")
+                elif not returnValue == const.VOID and early.instruction == Instruction.ret:
+                    self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous,msg="miss a return value")
 
     # 错误处理函数
     def error(self,errorNo = Error.AN_UNDEFINED, Vt = None, msg = ''):

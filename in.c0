@@ -1,3 +1,4 @@
+/*
 int e=2, UPPER=1231231231312331312;
 int power(int x) 
 {
@@ -14,7 +15,7 @@ int power(int x)
    }
    return (result);
 }
-
+***//*
 void main()
 {
    int number, test;
@@ -29,17 +30,25 @@ void main()
    print("Now we test the nagtive-parameter:");
    print(power(-1));
 }
-/*
+*/
+
 double x;
 
-int fun(int num) {
+double fun(int num) {
     int rtv = num/2;
-    return rtv+1;
+    ;;;;;;;;;;;
+    print(rtv);
+    return rtv + 2.0;
 }
-
 void main() {
+    int y=0;
     x = 7;
-    fun(x);
+    y = fun(x);
+    print(fun(x));
+    if (0)
+      print(y);
+    else{
+         print(x);
+    }
     return;
 }
-*/

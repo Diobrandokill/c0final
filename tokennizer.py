@@ -246,11 +246,11 @@ class tokennizer:
                     self.getchar()
                 if not flag:
                     self.symbol = const.INTEGER_LITERAL
+                    if int(self.token) > 2147483647:
+                        self.token = "2147483647"
                 else:
                     self.token = double_to_hex(float(self.token))
                     self.symbol = const.DOUBLE_LITERAL
-                if int(self.token) > 2147483647:
-                    self.token = "2147483647"
                 # 记得多读的要回退一格,但是如果是到EOF则不回退
                 if(not self.isEOF()):
                     self.recract()
