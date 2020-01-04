@@ -42,8 +42,10 @@ double fun(int num) {
 }
 void main() {
     int y=0x63;
-    int y = 1;
+    //int y = 1;
     x = 7;
+    print('\r');
+    print("\x75\\1\n2\'3");
     print(y);
     //y = fun(x);
     print(fun(x));

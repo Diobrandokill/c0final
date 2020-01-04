@@ -65,6 +65,18 @@ class analyser:
         self.program = self.C0_program()
         return self.program
 
+    def checkexist(self,text,level):
+        varexist = self.symbolTable.getVar(text)
+        funcexistnum = self.symbolTable.getFunc(text)
+        if funcexistnum == None:
+            funcexist = None
+        else:
+            funcexist = self.symbolTable.funcs[funcexistnum]
+        if ((not varexist == None and varexist.level < level) or varexist == None) and ((not funcexist == None and funcexist.level < level) or funcexist == None):
+            return True
+        else:
+            return False
+
     # <C0-program> ::= {<variable-declaration>}{<function-definition>}
     def C0_program(self):
         overlookSet = [const.CONST, const.INT, const.VOID]
@@ -110,8 +122,12 @@ class analyser:
                     if self.pointer.isL_Parenthesis():
                         self.setsymat(tempPointer)
                         self.level += 1
+                        #记录局部变量个数
+                        varnum = len(self.symbolTable.var)
                         V_program.append(self.function_definition(overlookSet))
                         self.level -= 1
+                        #删除局部变量
+                        self.symbolTable.var = self.symbolTable.var[:varnum]
                     else:
                         self.error(Error.AN_MISS_L_PARENTHESIS,self.pointer.previous)
                         self.overlookToMarks(overlookSet)
@@ -219,54 +235,59 @@ class analyser:
         if self.pointer.isID():
             V_init_declarator.append(self.pointer)
             self.pointer.level = self.level
-            if flag == 1:
-                if type == 1:
-                    self.symbolTable.var.append(tableitem("double",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
-                    self.symbolTable.offset[self.pointer.level] += 2
-                elif type == 0:
-                    self.symbolTable.var.append(tableitem("int",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
-                    self.symbolTable.offset[self.pointer.level] += 1
-            else:
-                if type == 1:
-                    self.symbolTable.var.append(tableitem("double",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
-                    self.symbolTable.offset[self.pointer.level] += 2
-                elif type == 0:
-                    self.symbolTable.var.append(tableitem("int",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
-                    self.symbolTable.offset[self.pointer.level] += 1
-            var = self.symbolTable.getVar(self.pointer.text)
-            self.getsym()
-            # 去符号表中找这个ID，找不到记得报错
-            if self.pointer.isAssign():
-                if type == 1:
-                    self.emit(Instruction(Instruction.snew,2))
+            if self.checkexist(self.pointer.text,self.level) == True:
+                if flag == 1:
+                    if type == 1:
+                        self.symbolTable.var.append(tableitem("double",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
+                        self.symbolTable.offset[self.pointer.level] += 2
+                    elif type == 0:
+                        self.symbolTable.var.append(tableitem("int",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
+                        self.symbolTable.offset[self.pointer.level] += 1
                 else:
-                    self.emit(Instruction(Instruction.snew,1))
-                if var.level == 0 and self.level != var.level:
-                    self.emit(Instruction(Instruction.loada, 1, var.offset))
-                else:
-                    self.emit(Instruction(Instruction.loada, 0, var.offset))
-                init,init_type = self.initializer(overlookSet)
-                V_init_declarator.append(init)
-                if type == 1 and not init_type == "double":
-                    self.emit(Instruction(Instruction.i2d))
-                    self.emit(Instruction(Instruction.dstore))
-                elif type == 0 and init_type == "double":
-                    self.emit(Instruction(Instruction.d2i))
-                    self.emit(Instruction(Instruction.istore))
-                elif type == 0 and init_type == "int":
-                    self.emit(Instruction(Instruction.istore))
-                elif type == 1 and init_type == "double":
-                    self.emit(Instruction(Instruction.dstore))
-            else :
-                if flag == 1 :
-                    self.error(Error.AN_MISS_ASSIGN, self.pointer.previous, "Gramma Analysis Error: A \'=\'  is expected in const variables\' defination  .")
-                    self.overlookToMarks(overlookSet)
-                    V_init_declarator.empty()
-                else:
+                    if type == 1:
+                        self.symbolTable.var.append(tableitem("double",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
+                        self.symbolTable.offset[self.pointer.level] += 2
+                    elif type == 0:
+                        self.symbolTable.var.append(tableitem("int",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
+                        self.symbolTable.offset[self.pointer.level] += 1
+                var = self.symbolTable.getVar(self.pointer.text)
+                self.getsym()
+                # 去符号表中找这个ID，找不到记得报错
+                if self.pointer.isAssign():
                     if type == 1:
                         self.emit(Instruction(Instruction.snew,2))
                     else:
                         self.emit(Instruction(Instruction.snew,1))
+                    if var.level == 0 and self.level != var.level:
+                        self.emit(Instruction(Instruction.loada, 1, var.offset))
+                    else:
+                        self.emit(Instruction(Instruction.loada, 0, var.offset))
+                    init,init_type = self.initializer(overlookSet)
+                    V_init_declarator.append(init)
+                    if type == 1 and not init_type == "double":
+                        self.emit(Instruction(Instruction.i2d))
+                        self.emit(Instruction(Instruction.dstore))
+                    elif type == 0 and init_type == "double":
+                        self.emit(Instruction(Instruction.d2i))
+                        self.emit(Instruction(Instruction.istore))
+                    elif type == 0 and init_type == "int":
+                        self.emit(Instruction(Instruction.istore))
+                    elif type == 1 and init_type == "double":
+                        self.emit(Instruction(Instruction.dstore))
+                else :
+                    if flag == 1 :
+                        self.error(Error.AN_MISS_ASSIGN, self.pointer.previous, "Gramma Analysis Error: A \'=\'  is expected in const variables\' defination  .")
+                        self.overlookToMarks(overlookSet)
+                        V_init_declarator.empty()
+                    else:
+                        if type == 1:
+                            self.emit(Instruction(Instruction.snew,2))
+                        else:
+                            self.emit(Instruction(Instruction.snew,1))
+            else:
+                self.error(Error.AN_ILLEGAL_INPUT,self.pointer,"can not define the var or const with used name")
+                self.overlookToMarks(overlookSet)
+                V_init_declarator.empty()
         else :
             self.error(Error.AN_MISS_IDENTIFIER,self.pointer.previous)
             self.overlookToMarks(overlookSet)
@@ -840,8 +861,12 @@ class analyser:
         # 如果是{，就是处理语句序列
         elif self.pointer.isL_Brace():
             self.level += 1
+            #记录局部变量个数
+            varnum = len(self.symbolTable.var)
             V_statement.append(self.compound_statement(sentenceListOverlookSet))
             self.level -= 1
+            #删除局部变量
+            self.symbolTable.var = self.symbolTable.var[:varnum]
         elif self.pointer.isR_Return():
             V_statement.append(self.return_statement(sentenceOverlookSet))
         elif self.pointer.isR_Scan():

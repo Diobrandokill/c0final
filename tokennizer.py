@@ -160,7 +160,11 @@ class tokennizer:
             return True
         else:
             return False
-
+    def isescape(self):
+        if self.char == '\\' or self.char == '\'' or self.char == '\"' or self.char == 'n' or self.char == 'r' or self.char == 't':
+            return True
+        else:
+            False
     # 创建终结符
     def createVT(self):
         # 如果读取到的是注释，不创建节点，直接跳过
@@ -378,7 +382,7 @@ class tokennizer:
                     self.catToken()
                     self.getchar()
                     if not self.islegal():
-                        print(ord(self.char))
+                        #print(ord(self.char))
                         self.error(Error.TK_ILLEGAL_INPUT, "Word Analysis Error: Unrecognized Char.")
                         self.inError = True
                         break
@@ -398,7 +402,7 @@ class tokennizer:
         # 输入为 ' 进入字符分析
         elif self.isS_Quatation():
             self.getchar()
-            if self.islegal():
+            if self.islegal() and not self.char == '\\':
                 self.char = str(ord(self.char))
                 self.catToken()
                 self.getchar()
@@ -406,6 +410,24 @@ class tokennizer:
                     self.error(Error.TK_ILLEGAL_INPUT, "Word Analysis Error: Missing R_Quatation.")
                     self.inError = True
                 self.symbol = const.CHAR_LITERAL
+            elif self.char == '\\':
+                escape = self.char
+                self.getchar()
+                if self.isescape() == True:
+                    if self.char == 't':
+                        self.token = str(ord('\t'))  
+                    elif self.char == 'n':
+                        self.token = str(ord('\n')) 
+                    elif self.char == 'r':
+                        self.token = str(ord('\r'))  
+                    else:          
+                        escape += self.char
+                        self.token = str(ord(escape[1:]))
+                    self.getchar()    
+                    self.symbol = const.CHAR_LITERAL
+                    if not self.isS_Quatation():
+                        self.error(Error.TK_ILLEGAL_INPUT, "Word Analysis Error: Missing R_Quatation.")
+                        self.inError = True
             else:
                 self.error(Error.TK_ILLEGAL_INPUT, "Word Analysis Error: Unrecognized Char.")
                 self.inError = True
