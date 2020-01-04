@@ -48,10 +48,7 @@ class analyser:
         if not self.isEnd():
             self.pointer = self.pointer.next
         else :
-            print("to End！")
-        # 对于连续的空分号的处理: 直接忽略
-        if (not self.pointer is None) and self.pointer.isSemicolon() and self.pointer.previous.isSemicolon():
-            self.getsym()
+            print("to End！\n")
     # 判断语法分析是否结束
     def isEnd(self):
         return self.pointer.isEOF()
@@ -73,21 +70,37 @@ class analyser:
         overlookSet = [const.CONST, const.INT, const.VOID]
         V_program = VN.create(const.C0PROGRAM,self.level)
         flag = 0
+        # {<variable-declaration>}
         while True:
             # 如果是const，<常量分析>
             if self.pointer.isR_Const():
                 V_program.append(self.const_declaration(overlookSet))
             # void 直接进void
-            elif self.pointer.isR_Void():
-                if self.pointer.next.text == "main":
-                    flag = 1
-                self.level += 1
-                V_program.append(self.function_definition(overlookSet))
-                self.level -= 1
-            # int or double只能是变量定义 或 函数
-            elif self.pointer.isR_Int() or self.pointer.isR_Double():
-                # 保存下当前指针状态
+            elif self.pointer.isR_Void() or self.pointer.isR_Int() or self.pointer.isR_Double():
                 tempPointer = self.pointer
+                self.getsym()
+                if self.pointer.isID():
+                    if self.pointer.text == "main":
+                        flag = 1
+                    self.getsym()
+                    # 如果是左括号,那就是函数定义了，其它情况都交给变量定义来做
+                    if self.pointer.isL_Parenthesis():
+                        self.setsymat(tempPointer)
+                        break
+                    else:
+                        self.setsymat(tempPointer)
+                        V_program.append(self.variable_declaration(overlookSet))
+                        flag = 0
+            elif self.isEnd():
+                break
+            else :
+                self.error(Error.AN_ILLEGAL_INPUT,self.pointer,msg="input should be var-dec or func-dec")
+                self.overlookToMarks(overlookSet)
+        # {<function-definition>}
+        while True:
+            tempPointer = self.pointer
+            # int or double只能是变量定义 或 函数
+            if self.pointer.isR_Int() or self.pointer.isR_Double() or self.pointer.isR_Void():
                 self.getsym()
                 if self.pointer.isID():
                     if self.pointer.text == "main":
@@ -100,9 +113,8 @@ class analyser:
                         V_program.append(self.function_definition(overlookSet))
                         self.level -= 1
                     else:
-                        self.setsymat(tempPointer)
-                        V_program.append(self.variable_declaration(overlookSet))
-                # ID都识别不出来，那只有一个int头，交给变量定义吧
+                        self.error(Error.AN_MISS_L_PARENTHESIS,self.pointer.previous)
+                        self.overlookToMarks(overlookSet)
                 else :
                     self.error(Error.AN_ILLEGAL_INPUT,self.pointer.previous,msg="missing identifier")
                     self.overlookToMarks(overlookSet)
@@ -605,7 +617,6 @@ class analyser:
             if(self.pointer.isID()):
                 V_function_definition.append(self.pointer)
                 self.pointer.level = self.level
-                print(self.pointer.text)
                 if not self.symbolTable.isunique(self.pointer.text) :
                     self.symbolTable.constant.append(tableitem('S',self.pointer.text,self.pointer.level,0,0))
                 self.getsym()
@@ -758,16 +769,16 @@ class analyser:
             # 读到int，则是变量说明
             elif self.pointer.isR_Int() or self.pointer.isR_Double():
                 V_compound_statement.append(self.variable_declaration(downOverlookSet))
-            # 否则就只能是语句序列了，整！
-            elif self.pointer.isID() or self.pointer.isL_Brace() \
-                or self.pointer.isR_If() or self.pointer.isR_While() \
-                or self.pointer.isR_Return() or self.pointer.isR_Print() \
-                or self.pointer.isR_Scan():
-                V_compound_statement.append(self.statement_seq(downOverlookSet))
             else:
-                self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous)
-                self.overlookToMarks(selfOverlookSet)
                 break
+        if self.pointer.isID() or self.pointer.isL_Brace() \
+            or self.pointer.isR_If() or self.pointer.isR_While() \
+            or self.pointer.isR_Return() or self.pointer.isR_Print() \
+            or self.pointer.isR_Scan():
+            V_compound_statement.append(self.statement_seq(downOverlookSet))
+        else:
+            self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous)
+            self.overlookToMarks(selfOverlookSet)
         # 复合语句的最后，因该是一个}，无则报错
         if self.pointer.isR_Brace():
             V_compound_statement.append(self.pointer)
@@ -787,7 +798,6 @@ class analyser:
         self.overlookSetAdd(downOverlookSet, const.L_BRACE) #语句序列
         self.overlookSetAdd(downOverlookSet, const.SCAN)
         self.overlookSetAdd(downOverlookSet, const.PRINT)
-        flag = False
         V_statement_seq = VN.create(const.STAT_SEQ,self.level)
         # 对于是语句First集的单词，统统继续叠加语句
         while self.pointer.isID() or self.pointer.isR_If() \
@@ -798,14 +808,9 @@ class analyser:
                 V_statement_seq.append(self.statement(downOverlookSet))
                 marks = [const.R_BRACE]
                 self.overlookToMarks(marks)
-                flag = True
                 break
             else:
                 V_statement_seq.append(self.statement(downOverlookSet))
-        '''
-        if flag == False:
-            self.error(Error.AN_MISS_RET_STATEMENT, self.pointer.previous)
-        '''
         return self.checkEmpty(V_statement_seq)
 
     # <statement> ::= <compound-statement> | <condition-statement>
@@ -942,6 +947,7 @@ class analyser:
                         self.instructionStream.instructions[index1] = Instruction(Instruction.je,label2)
                     self.instructionStream.instructions[index2] = Instruction(Instruction.jmp,label3)
                 else:
+                    label2 -= 1
                     if not relationOperator == None:
                         if relationOperator.vtype == const.EQ:
                             self.instructionStream.instructions[index1] = Instruction(Instruction.jne,label2)
@@ -978,9 +984,12 @@ class analyser:
         self.emit(Instruction(Instruction.nop))
         V_condition.append(expression)
         relationOperator = None
+        index = len(self.instructionStream.instructions)-1
+        '''
         for index in range(len(self.instructionStream.instructions)-1,-1,-1):
             if self.instructionStream.instructions[index].instruction == Instruction.nop:
                 break
+        '''
         if self.pointer.isRelationOperator():
             relationOperator = self.pointer
             V_condition.append(relationOperator)
@@ -1028,15 +1037,12 @@ class analyser:
                 V_loop_statement.append(self.pointer)
                 self.getsym()
                 self.emit(Instruction(Instruction.nop))
+                index = len(self.instructionStream.instructions) - 1
                 V_loop_statement.append(self.statement(overlookSet))
-                #记录目前的最后的指令的位置
                 for base in range(len(self.instructionStream.instructions)-1,-1,-1):
                     if len(self.instructionStream.instructions[base].lab) > 0:
                         break
                 label2 = len(self.instructionStream.instructions)-base+1
-                for index in range(len(self.instructionStream.instructions)-1,-1,-1):
-                    if self.instructionStream.instructions[index].instruction == Instruction.nop:
-                        break
                 if not relationOperator == None:
                     if relationOperator.vtype == const.EQ:
                         self.instructionStream.instructions[index] = Instruction(Instruction.jne,label2)
@@ -1080,8 +1086,12 @@ class analyser:
                 self.emit(Instruction(Instruction.dret))
             else:
                 self.emit(Instruction(Instruction.iret))
+        if not self.pointer.isSemicolon():
+            self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
+            self.overlookToMarks(overlookSet)
         else:
             self.emit(Instruction(Instruction.ret))
+            self.getsym()
         return V_return_statement
 
     # <scan-statement> ::= 'scan' '(' <identifier> ')' ';'
@@ -1097,8 +1107,9 @@ class analyser:
             if self.pointer.isID():
                 id = self.pointer
                 var = self.symbolTable.getVar(id.text)
-                if not var:
+                if var == None:
                     self.error(Error.ST_UNDEFINED_ID, self.pointer.previous)
+                    self.overlookToMarks(overlookSet)
                 # 找到标识符，先加载
                 else:
                     if var.level == 0 and self.level != var.level:
