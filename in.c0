@@ -1,4 +1,4 @@
-int e=2, UPPER=200;
+int e=2, UPPER=1231231231312331312;
 int power(int x) 
 {
    int result, i;
