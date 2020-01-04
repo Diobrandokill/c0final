@@ -9,9 +9,9 @@
 7  I  0              
 8  S  "lalala"       
 9  S  "123"          
-10 I  3              
-11 S  "woshale"      
-12 I  1              
+10 S  "woshale"      
+11 I  1              
+12 I  100            
 .start:
 0  snew  2       
 1  snew  2       
@@ -91,26 +91,26 @@
 47  jmp    72      
 48  snew   1       
 49  loada  0,0     
-50  loadc  10      
+50  loadc  7       
 51  istore         
-52  loada  0,0     
-53  iload          
-54  loadc  7       
-55  icmp           
-56  je     72      
-57  loadc  11      
-58  sprint         
-59  bipush 32      
-60  cprint         
+52  loadc  10      
+53  sprint         
+54  bipush 32      
+55  cprint         
+56  loada  0,0     
+57  iload          
+58  iprint         
+59  printl         
+60  loada  0,0     
 61  loada  0,0     
 62  iload          
-63  iprint         
-64  printl         
-65  loada  0,0     
+63  loadc  11      
+64  isub           
+65  istore         
 66  loada  0,0     
 67  iload          
 68  loadc  12      
-69  isub           
-70  istore         
-71  jmp    52      
+69  ineg           
+70  icmp           
+71  jg     52      
 72  ret            

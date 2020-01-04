@@ -777,11 +777,12 @@ class analyser:
         self.overlookSetAdd(downOverlookSet, const.INT)     # <variable-declaration>
         self.overlookSetAdd(downOverlookSet, const.CONST)   # <const-declaration> 
         self.overlookSetAdd(downOverlookSet, const.IF)      # <condition-statement>
-        self.overlookSetAdd(downOverlookSet, const.WHILE)   # <loop-statement>
+        self.overlookSetAdd(downOverlookSet, const.WHILE)   # <loop1-statement>
         self.overlookSetAdd(downOverlookSet, const.RETURN)  # <return-statement>
         self.overlookSetAdd(downOverlookSet, const.L_BRACE) # <compound-statement>
         self.overlookSetAdd(downOverlookSet, const.SCAN)    # <scan-statement>
         self.overlookSetAdd(downOverlookSet, const.PRINT)   # <print-statement>
+        self.overlookSetAdd(downOverlookSet, const.DO)   # <loop2-statement>
         # 进入则表示已经识别{,直接添加
         V_compound_statement = VN.create(const.COM_STATE,self.level)
         V_compound_statement.append(self.pointer)
@@ -803,7 +804,7 @@ class analyser:
         if self.pointer.isID() or self.pointer.isL_Brace() \
             or self.pointer.isR_If() or self.pointer.isR_While() \
             or self.pointer.isR_Return() or self.pointer.isR_Print() \
-            or self.pointer.isR_Scan() or self.pointer.isSemicolon():
+            or self.pointer.isR_Scan() or self.pointer.isSemicolon() or self.pointer.isR_Do():
             V_compound_statement.append(self.statement_seq(downOverlookSet))
         else:
             self.error(Error.AN_ILLEGAL_INPUT, self.pointer.previous,msg="missing statement-seq")
@@ -832,7 +833,7 @@ class analyser:
         while self.pointer.isID() or self.pointer.isR_If() \
             or self.pointer.isR_While() or self.pointer.isR_Return() \
             or self.pointer.isL_Brace() or self.pointer.isR_Scan() \
-            or self.pointer.isR_Print() or self.pointer.isSemicolon():
+            or self.pointer.isR_Print() or self.pointer.isSemicolon() or self.pointer.isR_Do():
             if self.pointer.isR_Return():
                 V_statement_seq.append(self.statement(downOverlookSet))
                 marks = [const.R_BRACE]
@@ -857,7 +858,9 @@ class analyser:
         if self.pointer.isR_If():
             V_statement.append(self.condition_statement(overlookSet))
         elif self.pointer.isR_While():
-            V_statement.append(self.loop_statement(overlookSet))
+            V_statement.append(self.loop1_statement(overlookSet))
+        elif self.pointer.isR_Do():
+            V_statement.append(self.loop2_statement(overlookSet))
         # 如果是{，就是处理语句序列
         elif self.pointer.isL_Brace():
             self.level += 1
@@ -1033,25 +1036,25 @@ class analyser:
         # 这里结束后没有检查，直接返回
         return self.checkEmpty(V_condition),label1,relationOperator
 
-    # <loop-statement> ::= 
+    # <loop1-statement> ::= 
     # 'while' '(' <condition> ')' <statement>
-    def loop_statement(self, overlookSet = [const.R_BRACE]):
+    def loop1_statement(self, overlookSet = [const.R_BRACE]):
         downOverlookSet = [const.R_BRACE]
         self.overlookSetAdd(downOverlookSet, const.R_PARENTHESIS)
-        V_loop_statement = VN.create(const.LOOP_STATE,self.level)
-        V_loop_statement.append(self.pointer)
+        V_loop1_statement = VN.create(const.LOOP_STATE,self.level)
+        V_loop1_statement.append(self.pointer)
         self.getsym()
         if self.pointer.isL_Parenthesis():
-            V_loop_statement.append(self.pointer)
+            V_loop1_statement.append(self.pointer)
             self.getsym()
             cond,label1,relationOperator = self.condition(downOverlookSet)
-            V_loop_statement.append(cond)
+            V_loop1_statement.append(cond)
             if self.pointer.isR_Parenthesis():
-                V_loop_statement.append(self.pointer)
+                V_loop1_statement.append(self.pointer)
                 self.getsym()
                 self.emit(Instruction(Instruction.nop))
                 index = len(self.instructionStream.instructions) - 1
-                V_loop_statement.append(self.statement(overlookSet))
+                V_loop1_statement.append(self.statement(overlookSet))
                 for base in range(len(self.instructionStream.instructions)-1,-1,-1):
                     if len(self.instructionStream.instructions[base].lab) > 0:
                         break
@@ -1078,7 +1081,64 @@ class analyser:
         else:
             self.error(Error.AN_MISS_L_PARENTHESIS, self.pointer.previous)
             self.overlookToMarks(downOverlookSet)
-        return self.checkEmpty(V_loop_statement)
+        return self.checkEmpty(V_loop1_statement)
+
+    # <loop2-statement> ::= 
+    # ‘do' <statement> 'while' '(' <condition> ')' ';'
+    def loop2_statement(self, overlookSet = [const.R_BRACE]):
+        downOverlookSet = [const.R_BRACE]
+        self.overlookSetAdd(downOverlookSet, const.R_PARENTHESIS)
+        V_loop2_statement = VN.create(const.LOOP_STATE,self.level)
+        V_loop2_statement.append(self.pointer)
+        self.getsym()
+        for base in range(len(self.instructionStream.instructions)-1,-1,-1):
+            if len(self.instructionStream.instructions[base].lab) > 0:
+                break
+        label2 = len(self.instructionStream.instructions)-base
+        V_loop2_statement.append(self.statement(overlookSet))
+        if self.pointer.isR_While():
+            V_loop2_statement.append(self.pointer)
+            self.getsym()
+            if self.pointer.isL_Parenthesis():
+                V_loop2_statement.append(self.pointer)
+                self.getsym()
+                cond,label1,relationOperator = self.condition(downOverlookSet)
+                V_loop2_statement.append(cond)
+                if self.pointer.isR_Parenthesis():
+                    V_loop2_statement.append(self.pointer)
+                    if not relationOperator == None:
+                        if relationOperator.vtype == const.EQ:
+                            self.emit(Instruction(Instruction.je,label2))
+                        elif relationOperator.vtype == const.LE:
+                            self.emit(Instruction(Instruction.jle,label2))
+                        elif relationOperator.vtype == const.LT:
+                            self.emit(Instruction(Instruction.jl,label2))
+                        elif relationOperator.vtype == const.GE:
+                            self.emit(Instruction(Instruction.jge,label2))
+                        elif relationOperator.vtype == const.GT:
+                            self.emit(Instruction(Instruction.jg,label2))
+                        elif relationOperator.vtype == const.NE:
+                            self.emit(Instruction(Instruction.jne,label2))
+                    else:
+                        self.emit(Instruction(Instruction.jne,label2))
+                    # 读分号
+                    self.getsym()
+                    if self.pointer.isSemicolon():
+                        V_loop2_statement.append(self.pointer)
+                        self.getsym()
+                    else:
+                        self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
+                        self.overlookToMarks(overlookSet)
+                else:
+                    self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
+                    self.overlookToMarks(downOverlookSet)
+            else:
+                self.error(Error.AN_MISS_L_PARENTHESIS, self.pointer.previous)
+                self.overlookToMarks(downOverlookSet)
+        else:
+            self.error(Error.AN_ILLEGAL_INPUT, self.pointer,"missing while")
+            self.overlookToMarks(downOverlookSet)
+        return self.checkEmpty(V_loop2_statement)
 
     # <jump-statement> ::= 
     # 'break' ';'
