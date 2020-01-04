@@ -174,6 +174,9 @@ class analyser:
             var_type = 1
         elif self.pointer.isR_Int():
             var_type = 0
+        else:
+            self.error(Error.AN_ILLEGAL_INPUT,self.pointer.previous,msg = "type should be int or double")
+            self.overlookToMarks(overlookSet)
         V_variable_declaration.append(self.pointer)
         self.getsym()
         init_dec,init_type = self.init_declarator(downoverlookSet,flag = 0,type = var_type)
@@ -192,6 +195,7 @@ class analyser:
             # 如果没有分号，报错！但是别多读一个了
             # 已经读的仍然保留
             self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
+            self.overlookToMarks(overlookSet)
         if not V_variable_declaration.hasVn():
             V_variable_declaration.empty()
         return self.checkEmpty(V_variable_declaration)
@@ -601,7 +605,8 @@ class analyser:
             if(self.pointer.isID()):
                 V_function_definition.append(self.pointer)
                 self.pointer.level = self.level
-                if not self.symbolTable.isunique(self.pointer.text[1:-1]) :
+                print(self.pointer.text)
+                if not self.symbolTable.isunique(self.pointer.text) :
                     self.symbolTable.constant.append(tableitem('S',self.pointer.text,self.pointer.level,0,0))
                 self.getsym()
             else:
@@ -617,7 +622,7 @@ class analyser:
                 V_function_definition.append(void)
                 self.pointer.level = self.level
                 id = self.pointer
-                if not self.symbolTable.isunique(self.pointer.text[1:-1]) :
+                if not self.symbolTable.isunique(self.pointer.text) :
                     self.symbolTable.constant.append(tableitem('S',self.pointer.text,self.pointer.level,0,0))
                 V_function_definition.append(self.pointer)
                 self.getsym()
@@ -628,7 +633,7 @@ class analyser:
                 return V_function_definition.empty()
         # 都不是，那就报"不认识"
         else:
-            self.error(Error.AN_ILLEGAL_TYPE, self.pointer.previous)
+            self.error(Error.AN_ILLEGAL_TYPE, self.pointer,msg="invalid function type")
             self.overlookToMarks(overlookSet)
             return V_function_definition.empty()
         # 接着是参数解析
@@ -645,7 +650,7 @@ class analyser:
         if self.pointer.isL_Brace():
             V_function_definition.append(self.compound_statement())
         else:
-            self.error(Error.AN_MISS_L_BRACE, self.pointer.previous)
+            self.error(Error.AN_MISS_L_BRACE, self.pointer)
             self.overlookToMarks(overlookSet)
         self.run_functionDefineEnd(V_function_definition)
         return V_function_definition
@@ -668,6 +673,7 @@ class analyser:
             self.getsym()
         else:
             self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
+            self.overlookToMarks(lookoverSet)
         return self.checkEmpty(V_parameter_clause)
 
     # <parameter-declaration-list> ::= 
@@ -683,7 +689,7 @@ class analyser:
             comma = self.pointer
             self.getsym() 
             dec = self.parameter_declaration(overlookSet)
-            if dec:
+            if not dec.vtype == const.EMPTY:
                 V_parameter_declaration_list.append(comma)
                 V_parameter_declaration_list.append(dec)
                 parameterNum += 1
@@ -696,26 +702,18 @@ class analyser:
     def parameter_declaration(self, overlookSet = [const.R_PARENTHESIS]):
         flag = 0
         V_parameter_declaration = VN.create(const.PARA_DEC,self.level)
-        '''
-        funcname = self.pointer.previous.previous
-        funcitem = None
-        for func in self.symbolTable.funcs:
-            if func.name == funcname.text:
-                funcitem = func
-                break
-        '''
         if self.pointer.isR_Const():
             V_parameter_declaration.append(self.pointer)
             self.getsym()
             flag == 1
         if self.pointer.isR_Int() or self.pointer.isR_Double():
-            var = self.pointer
+            var_type = self.pointer
             V_parameter_declaration.append(self.pointer)
             self.getsym()
             if self.pointer.isID():
                 V_parameter_declaration.append(self.pointer)
                 self.pointer.level = self.level
-                if var.isR_Double():
+                if var_type.isR_Double():
                     self.symbolTable.var.append(tableitem("double",self.pointer.text,self.pointer.level,self.symbolTable.offset[self.pointer.level],flag))
                     #funcitem.para.append("double")
                     self.symbolTable.offset[self.pointer.level] += 2
@@ -1236,6 +1234,7 @@ class analyser:
     # 语义分析
     # <函数定义部分>
     def run_functionDefine(self, Vn):
+        overlookSet = [const.CONST, const.INT, const.VOID]
         if Vn.hasChild(const.VOID):
             returnValue = "VOID"
         elif Vn.hasChild(const.INT):
@@ -1244,6 +1243,9 @@ class analyser:
             returnValue = "DOUBLE"
         id = Vn.findChild(const.ID)
         name = id.text
+        if not self.symbolTable.getFunc(id.text) == None:
+            self.error(Error.AN_ILLEGAL_INPUT, id,msg="can not define the function with used name")
+            self.overlookToMarks(overlookSet)
         # 如果有参数表，记得加入参数到符号表中
         parameter = Vn.findChild(const.PARA_CLA)
         if parameter.hasChild(const.PARA_DEC_LIST):

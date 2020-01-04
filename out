@@ -25,7 +25,7 @@
 6   iload          
 7   loadc  4       
 8   icmp           
-9   jg     13      
+9   jg     12     
 10  loadc  4       
 11  iret           
 12  loada  0,2     
