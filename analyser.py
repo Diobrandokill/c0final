@@ -520,10 +520,10 @@ class analyser:
         downOverlookSet = overlookset[:]
         self.overlookSetAdd(downOverlookSet, const.R_PARENTHESIS)
         V_function_call = VN.create(const.FUNC_CALL,self.level)
-        func = self.pointer
-        V_function_call.append(func)
-        symbolFunc = self.symbolTable.funcs[self.symbolTable.getFunc(func.text)]
-        if not symbolFunc:
+        func_pointer = self.pointer
+        V_function_call.append(func_pointer)
+        funcnum = self.symbolTable.getFunc(func_pointer.text)
+        if funcnum == None:
             self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not find this func")
             self.overlookToMarks(overlookset)
         self.getsym()
@@ -533,19 +533,11 @@ class analyser:
             # 下一个如果不是右括号，才进入参数表分析
             if not self.pointer.isR_Parenthesis():
                 paraValue = self.expression_list(downOverlookSet)
-                '''
-                paras = paraValue.findChildren(const.EXP)
-                # 这里检查参数数量是否正确，但是出错也不要 overlook
-                if len(paras) > symbolFunc.paraNum:
-                    self.error(Error.ST_CALL_PARANUM_EXCEED, func)
-                elif len(paras) < symbolFunc.paraNum:
-                    self.error(Error.ST_CALL_PARANUM_LACK, func)
-                '''
                 V_function_call.append(paraValue)
             if self.pointer.isR_Parenthesis():
                 V_function_call.append(self.pointer)
                 self.getsym()
-                self.emit(Instruction(Instruction.call,self.symbolTable.getFunc(func.text)))
+                self.emit(Instruction(Instruction.call,self.symbolTable.getFunc(func_pointer.text)))
             else:
                 self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
                 self.overlookToMarks(overlookset)
@@ -661,7 +653,7 @@ class analyser:
         if self.pointer.isL_Brace():
             V_function_definition.append(self.compound_statement())
         else:
-            self.error(Error.AN_MISS_L_BRACE, self.pointer)
+            self.error(Error.AN_MISS_L_BRACE, self.pointer.previous)
             self.overlookToMarks(overlookSet)
         self.run_functionDefineEnd(V_function_definition)
         return V_function_definition
@@ -836,44 +828,23 @@ class analyser:
             self.level -= 1
         elif self.pointer.isR_Return():
             V_statement.append(self.return_statement(sentenceOverlookSet))
-            if self.pointer.isSemicolon():
-                V_statement.append(self.pointer)
-                self.getsym()
-            else:
-                self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
-                self.overlookToMarks(overlookSet)
         elif self.pointer.isR_Scan():
             V_statement.append(self.scan_statement(sentenceOverlookSet))
-            if self.pointer.isSemicolon():
-                V_statement.append(self.pointer)
-                self.getsym()
-            else:
-                self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
-                self.overlookToMarks(overlookSet)
         elif self.pointer.isR_Print():
             V_statement.append(self.print_statement(sentenceOverlookSet))
-            if self.pointer.isSemicolon():
-                V_statement.append(self.pointer)
-                self.getsym()
-            else:
-                #print(self.pointer.next.text)
-                self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
-                self.overlookToMarks(overlookSet)
         # 读到标识符，可能是函数调用或者赋值语句，
         elif self.pointer.isID() and self.pointer.next.isAssign():
             V_statement.append(self.assignment_expression(sentenceOverlookSet))
-            if self.pointer.isSemicolon():
-                V_statement.append(self.pointer)
-                self.getsym()
-            else:
-                self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
-                self.overlookToMarks(overlookSet)
         elif self.pointer.isID() and self.pointer.next.isL_Parenthesis():
             id = self.pointer
             V_statement.append(self.function_call(sentenceOverlookSet))
             if self.pointer.isSemicolon():
-                func = self.symbolTable.funcs[self.symbolTable.getFunc(id.text)]
-                if func:
+                funcnum = self.symbolTable.getFunc(id.text)
+                if funcnum == None:
+                    self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not find this func")
+                    self.overlookToMarks(overlookSet)
+                else:
+                    func = self.symbolTable.funcs[funcnum]
                     if func.returntype == "INT":
                         self.emit(Instruction(Instruction.pop))
                     elif func.returntype == "DOUBLE":
@@ -1122,7 +1093,7 @@ class analyser:
                     V_scan_statement.append(self.pointer)
                     self.getsym()
                     # 添加赋值指令
-                    if var.flag == 0:
+                    if var.flag == 0: 
                         if var.type == "double":
                             self.emit(Instruction(Instruction.dscan))
                             self.emit(Instruction(Instruction.dstore))
@@ -1131,6 +1102,12 @@ class analyser:
                             self.emit(Instruction(Instruction.istore))
                     else:
                         self.error(Error.AN_ILLEGAL_TYPE, self.pointer.previous)
+                        self.overlookToMarks(overlookSet)
+                    if self.pointer.isSemicolon():
+                        V_scan_statement.append(self.pointer)
+                        self.getsym()
+                    else:
+                        self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
                         self.overlookToMarks(overlookSet)
                 else:
                     self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
@@ -1157,15 +1134,20 @@ class analyser:
             V_printable.append(printable_list)
             if self.pointer.isR_Parenthesis():
                 V_printable.append(self.pointer)
-                self.getsym()
                 self.emit(Instruction(Instruction.printl))
+                self.getsym()
+                if self.pointer.isSemicolon():
+                    V_printable.append(self.pointer)
+                    self.getsym()
+                else:
+                    self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
+                    self.overlookToMarks(overlookSet)
             else:
                 self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
                 self.overlookToMarks(overlookSet)
         else :
             self.error(Error.AN_MISS_L_PARENTHESIS, self.pointer.previous)
             self.overlookToMarks(overlookSet)
-        
         return V_printable
 
     # <printable-list>  ::= <printable> {',' <printable>}
@@ -1181,7 +1163,7 @@ class analyser:
             V_printable_list.append(printable)
         return V_printable_list
 
-    # <printable> ::= <expression> | <string-literal>
+    # <printable> ::= <expression> | <string-literal> |
     def printable(self,overlookSet):
         V_printable = VN.create(const.PRINTABLE,self.level)
         if self.pointer.isString():
@@ -1241,6 +1223,12 @@ class analyser:
         else:
             self.error(Error.AN_MISS_ASSIGN, self.pointer.previous)
             self.overlookToMarks(overlookSet)
+        if self.pointer.isSemicolon():
+            V_assignment_expression.append(self.pointer)
+            self.getsym()
+        else:
+            self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
+            self.overlookToMarks(overlookSet)
         return V_assignment_expression
     # 语义分析
     # <函数定义部分>
@@ -1289,8 +1277,10 @@ class analyser:
             returnValue = const.DOUBLE
         else:
             returnValue = const.INT
-       
-        sentencelist = Vn.findChild(const.COM_STATE).findChild(const.STAT_SEQ)
+        sentencelist = None
+        if not Vn.findChild(const.COM_STATE) == None:
+            if not Vn.findChild(const.COM_STATE).findChild(const.STAT_SEQ) == None:
+                sentencelist = Vn.findChild(const.COM_STATE).findChild(const.STAT_SEQ)
         if sentencelist is None:
             self.error(Error.AN_MISS_SENTENCE, self.pointer.previous)
         else:

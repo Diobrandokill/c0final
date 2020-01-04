@@ -150,7 +150,7 @@ if __name__ == "__main__":
             tmpfile = open("tmp.s0",'w')
             outtext(infile,tmpfile)
             tmpfile.close()
-            os.system('./c0-vm-cpp -a tmp.s0 tmp.o0')
+            os.system('./c0-vm-cpp -a tmp.s0 out')
             os.remove('./tmp.s0')
     elif args.s:
         outtext(infile,outfile)
