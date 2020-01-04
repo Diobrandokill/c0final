@@ -249,7 +249,7 @@ class analyser:
                 V_init_declarator.append(init)
                 if type == 1 and not init_type == "double":
                     self.emit(Instruction(Instruction.i2d))
-                    self.emit(Instruction.dstore)
+                    self.emit(Instruction(Instruction.dstore))
                 elif type == 0 and init_type == "double":
                     self.emit(Instruction(Instruction.d2i))
                     self.emit(Instruction(Instruction.istore))
@@ -773,6 +773,10 @@ class analyser:
             # 读到int，则是变量说明
             elif self.pointer.isR_Int() or self.pointer.isR_Double():
                 V_compound_statement.append(self.variable_declaration(downOverlookSet))
+            elif self.pointer.isR_Void():
+                self.error(Error.AN_ILLEGAL_TYPE, self.pointer,'Gramma Analysis Error: Type of parameter should not be \"const void\" or \"void\"')
+                self.overlookToMarks([const.SEMICOLON])
+                self.getsym()
             else:
                 break
         if self.pointer.isID() or self.pointer.isL_Brace() \
