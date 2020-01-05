@@ -64,7 +64,7 @@ class analyser:
         # 进入程序是当前单词已经是链表的第一个单词
         self.program = self.C0_program()
         return self.program
-
+    # 检查作用域
     def checkexist(self,text,level):
         varexist = self.symbolTable.getVar(text)
         funcexistnum = self.symbolTable.getFunc(text)
@@ -76,6 +76,26 @@ class analyser:
             return True
         else:
             return False
+    # 查询break和continue地址
+    def find_bnc(self):
+        flag1 = False
+        flag2 = False
+        for index1 in range(len(self.instructionStream.instructions)-1,-1,-1):
+            if self.instructionStream.instructions[index1].instruction == Instruction.loop_break:
+                flag1 = True
+                break
+        for index2 in range(len(self.instructionStream.instructions)-1,-1,-1):
+            if self.instructionStream.instructions[index2].instruction == Instruction.loop_continue:
+                flag2 = True
+                break
+        if flag1 == False and flag2 == False:
+            return None,None
+        elif flag1 == True and flag2 == False:
+            return index1,None
+        elif flag1 == False and flag2 == True:
+            return None,index2
+        else:
+            return index1,index2
 
     # <C0-program> ::= {<variable-declaration>}{<function-definition>}
     def C0_program(self):
@@ -790,7 +810,10 @@ class analyser:
         self.overlookSetAdd(downOverlookSet, const.L_BRACE) # <compound-statement>
         self.overlookSetAdd(downOverlookSet, const.SCAN)    # <scan-statement>
         self.overlookSetAdd(downOverlookSet, const.PRINT)   # <print-statement>
-        self.overlookSetAdd(downOverlookSet, const.DO)   # <loop2-statement>
+        self.overlookSetAdd(downOverlookSet, const.DO)      # <loop2-statement>
+        self.overlookSetAdd(downOverlookSet, const.BREAK)   # <break-statement>
+        self.overlookSetAdd(downOverlookSet, const.CONTINUE)# <continue-statement>
+
         # 进入则表示已经识别{,直接添加
         V_compound_statement = VN.create(const.COM_STATE,self.level)
         V_compound_statement.append(self.pointer)
@@ -810,8 +833,8 @@ class analyser:
             else:
                 break
         if self.pointer.isID() or self.pointer.isL_Brace() \
-            or self.pointer.isR_If() or self.pointer.isR_While() \
-            or self.pointer.isR_Return() or self.pointer.isR_Print() \
+            or self.pointer.isR_If() or self.pointer.isR_While() or self.pointer.isR_Continue()\
+            or self.pointer.isR_Return() or self.pointer.isR_Print() or self.pointer.isR_Break()\
             or self.pointer.isR_Scan() or self.pointer.isSemicolon() or self.pointer.isR_Do():
             V_compound_statement.append(self.statement_seq(downOverlookSet))
         else:
@@ -836,11 +859,14 @@ class analyser:
         self.overlookSetAdd(downOverlookSet, const.L_BRACE) #语句序列
         self.overlookSetAdd(downOverlookSet, const.SCAN)
         self.overlookSetAdd(downOverlookSet, const.PRINT)
+        self.overlookSetAdd(downOverlookSet, const.DO)      # <loop2-statement>
+        self.overlookSetAdd(downOverlookSet, const.BREAK)   # <break-statement>
+        self.overlookSetAdd(downOverlookSet, const.CONTINUE)# <continue-statement>
         V_statement_seq = VN.create(const.STAT_SEQ,self.level)
         # 对于是语句First集的单词，统统继续叠加语句
         while self.pointer.isID() or self.pointer.isR_If() \
-            or self.pointer.isR_While() or self.pointer.isR_Return() \
-            or self.pointer.isL_Brace() or self.pointer.isR_Scan() \
+            or self.pointer.isR_While() or self.pointer.isR_Return() or self.pointer.isR_Continue()\
+            or self.pointer.isL_Brace() or self.pointer.isR_Scan() or self.pointer.isR_Break()\
             or self.pointer.isR_Print() or self.pointer.isSemicolon() or self.pointer.isR_Do():
             if self.pointer.isR_Return():
                 V_statement_seq.append(self.statement(downOverlookSet))
@@ -906,9 +932,16 @@ class analyser:
             else:
                 self.error(Error.AN_MISS_SEMICOLON, self.pointer.previous)
                 self.overlookToMarks(overlookSet)
-        # 全都不是，但是是个id，报错
         elif self.pointer.isSemicolon():
             V_statement.append(self.pointer)
+            self.getsym()
+        elif self.pointer.isR_Continue():
+            V_statement.append(self.pointer)
+            self.emit(Instruction(Instruction.loop_continue))
+            self.getsym()
+        elif self.pointer.isR_Break():
+            V_statement.append(self.pointer)
+            self.emit(Instruction(Instruction.loop_break))
             self.getsym()
         else:
             self.error(Error.AN_ILLEGAL_INPUT)
@@ -998,22 +1031,20 @@ class analyser:
     # <condition> ::= 
     # <expression>[<relational-operator><expression>] 
     def condition(self, overlookSet = [const.R_BRACE]):
+        label1 = 0
         V_condition = VN.create(const.CONDITION,self.level)
         base = 0
         for base in range(len(self.instructionStream.instructions)-1,-1,-1):
             if len(self.instructionStream.instructions[base].lab) > 0:
-               break
+               break    
         label1 = len(self.instructionStream.instructions) - base
+        if base == 0:
+            label1 = 0
         expression,tmp_exp_type = self.expression(overlookSet)
         self.emit(Instruction(Instruction.nop))
         V_condition.append(expression)
         relationOperator = None
         index = len(self.instructionStream.instructions)-1
-        '''
-        for index in range(len(self.instructionStream.instructions)-1,-1,-1):
-            if self.instructionStream.instructions[index].instruction == Instruction.nop:
-                break
-        '''
         if self.pointer.isRelationOperator():
             relationOperator = self.pointer
             V_condition.append(relationOperator)
@@ -1081,8 +1112,14 @@ class analyser:
                     elif relationOperator.vtype == const.NE:
                         self.instructionStream.instructions[index] = Instruction(Instruction.je,label2)
                 else:
-                    self.instructionStream.instructions[index] = Instruction(Instruction.jne,label2)
+                    self.instructionStream.instructions[index] = Instruction(Instruction.je,label2)
                 self.emit(Instruction(Instruction.jmp,label1))
+                # 加入对于break和continue的检查
+                bbreak,ccontinue = self.find_bnc()
+                if not bbreak == None:
+                    self.instructionStream.instructions[bbreak] = Instruction(Instruction.jmp,label2)
+                if not ccontinue == None:
+                    self.instructionStream.instructions[ccontinue] = Instruction(Instruction.jmp,label2-1)
             else:
                 self.error(Error.AN_MISS_R_PARENTHESIS, self.pointer.previous)
                 self.overlookToMarks(downOverlookSet)
@@ -1103,6 +1140,9 @@ class analyser:
             if len(self.instructionStream.instructions[base].lab) > 0:
                 break
         label2 = len(self.instructionStream.instructions)-base
+        if base == 0:
+            tmplabel = label2
+            label2 = 0
         V_loop2_statement.append(self.statement(overlookSet))
         if self.pointer.isR_While():
             V_loop2_statement.append(self.pointer)
@@ -1129,6 +1169,12 @@ class analyser:
                             self.emit(Instruction(Instruction.jne,label2))
                     else:
                         self.emit(Instruction(Instruction.jne,label2))
+                    # 加入对于break和continue的检查
+                    bbreak,ccontinue = self.find_bnc()
+                    if not bbreak == None:
+                        self.instructionStream.instructions[bbreak] = Instruction(Instruction.jmp,len(self.instructionStream.instructions)-tmplabel)
+                    if not ccontinue == None:
+                        self.instructionStream.instructions[ccontinue] = Instruction(Instruction.jmp,label1)
                     # 读分号
                     self.getsym()
                     if self.pointer.isSemicolon():
@@ -1355,26 +1401,27 @@ class analyser:
         elif Vn.hasChild(const.DOUBLE):
             returnValue = "DOUBLE"
         id = Vn.findChild(const.ID)
-        name = id.text
-        # 如果有参数表，记得加入参数到符号表中
-        parameter = Vn.findChild(const.PARA_CLA)
-        if not parameter == None:
-            if parameter.hasChild(const.PARA_DEC_LIST):
-                para_list = []
-                parameterList = parameter.findChild(const.PARA_DEC_LIST)
-                paraslot = 0
-                ids = parameterList.findGrandChildren(const.ID)
-                for id in ids:
-                    if id.previous.isR_Double():
-                        paraslot += 2
-                        para_list.append("double")
-                    elif id.previous.isR_Int():
-                        paraslot += 1
-                        para_list.append("int")
-                self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),paraslot,parameter.level,para_list,returnValue))
-            else:
-                para_list = []
-                self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),0,parameter.level,para_list,returnValue))
+        if not id == None:
+            name = id.text
+            # 如果有参数表，记得加入参数到符号表中
+            parameter = Vn.findChild(const.PARA_CLA)
+            if not parameter == None:
+                if parameter.hasChild(const.PARA_DEC_LIST):
+                    para_list = []
+                    parameterList = parameter.findChild(const.PARA_DEC_LIST)
+                    paraslot = 0
+                    ids = parameterList.findGrandChildren(const.ID)
+                    for id in ids:
+                        if id.previous.isR_Double():
+                            paraslot += 2
+                            para_list.append("double")
+                        elif id.previous.isR_Int():
+                            paraslot += 1
+                            para_list.append("int")
+                    self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),paraslot,parameter.level,para_list,returnValue))
+                else:
+                    para_list = []
+                    self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),0,parameter.level,para_list,returnValue))
             
     # 语义分析
     # 函数定义结束后的符号表收尾动作

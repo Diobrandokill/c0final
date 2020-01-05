@@ -126,7 +126,9 @@ reservers = {
     'do':const.DO,
     'print':const.PRINT,
     'scan':const.SCAN,
-    'return':const.RETURN
+    'return':const.RETURN,
+    'break':const.BREAK,
+    'continue':const.CONTINUE
 }
 
 
@@ -466,7 +468,8 @@ class Instruction():
     iscan   = 176
     dscan   = 177
     cscan   = 178
-    
+    loop_break   = 179  #fake
+    loop_continue = 180 #fake
     Msg = {
             nop:"nop",
             bipush:"bipush",
@@ -527,6 +530,8 @@ class Instruction():
             iscan:"iscan",
             dscan:"dscan",
             cscan:"cscan",
+            loop_break:"loop_break",
+            loop_continue:"loop_continue"
     }
 
     labNo = 0
