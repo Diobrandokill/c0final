@@ -11,6 +11,7 @@ import struct
 import os 
 import test
 
+'''
 # debugging
 infile = open("in.c0",'r')
 TK = tokennizer(infile)
@@ -30,7 +31,7 @@ AN.scan()
 #打印语法及语义分析错误
 for error in AN.errors:
     error.printMsg()
-
+'''
 
 def to_utf(number):
     return  chr(int(number,16))
