@@ -1,8 +1,12 @@
 .constants:
 0  I  100            
-1  S  "main"         
+1  S  "power"        
 2  I  1              
-3  S  "woshale"      
+3  I  0              
+4  S  "main"         
+5  I  95             
+6  S  "woshale"      
+7  S  "123"          
 .start:
 0  snew  2       
 1  loada 0,0     
@@ -10,24 +14,77 @@
 3  i2d           
 4  dstore        
 .functions:
-0  1  0  1  
+0  1  1  1  
+1  4  0  1  
 .F0:
-0   loada  1,0     
-1   loada  1,0     
-2   dload          
+0   snew   1       
+1   snew   1       
+2   loada  0,1     
 3   loadc  2       
-4   i2d            
-5   dsub           
-6   dstore         
+4   istore         
+5   loada  0,0     
+6   iload          
 7   loadc  3       
-8   sprint         
-9   bipush 32      
-10  cprint         
-11  loada  1,0     
-12  dload          
-13  dprint         
-14  printl         
-15  jmp    18      
-16  loadc  2       
-17  jne    0       
-18  ret            
+8   icmp           
+9   jg     12      
+10  loadc  3       
+11  iret           
+12  loada  1,0     
+13  loadc  2       
+14  i2d            
+15  dstore         
+16  loada  1,0     
+17  dload          
+18  loada  0,0     
+19  iload          
+20  i2d            
+21  dcmp           
+22  jg     40      
+23  loada  0,1     
+24  loada  0,1     
+25  iload          
+26  i2d            
+27  loada  1,0     
+28  dload          
+29  dmul           
+30  d2i            
+31  istore         
+32  loada  1,0     
+33  loada  1,0     
+34  dload          
+35  loadc  2       
+36  i2d            
+37  dadd           
+38  dstore         
+39  jmp    16      
+40  loada  0,1     
+41  iload          
+42  iret           
+.F1:
+0   loada  1,0     
+1   dload          
+2   loadc  5       
+3   i2d            
+4   dcmp           
+5   jle    26      
+6   loada  1,0     
+7   loada  1,0     
+8   dload          
+9   loadc  2       
+10  i2d            
+11  dsub           
+12  dstore         
+13  loadc  6       
+14  sprint         
+15  bipush 32      
+16  cprint         
+17  loada  1,0     
+18  dload          
+19  dprint         
+20  printl         
+21  jmp    26      
+22  loadc  7       
+23  sprint         
+24  printl         
+25  jmp    0       
+26  ret            

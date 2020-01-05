@@ -77,14 +77,14 @@ class analyser:
         else:
             return False
     # 查询break和continue地址
-    def find_bnc(self):
+    def find_bnc(self,start):
         flag1 = False
         flag2 = False
-        for index1 in range(len(self.instructionStream.instructions)-1,-1,-1):
+        for index1 in range(len(self.instructionStream.instructions)-1,start,-1):
             if self.instructionStream.instructions[index1].instruction == Instruction.loop_break:
                 flag1 = True
                 break
-        for index2 in range(len(self.instructionStream.instructions)-1,-1,-1):
+        for index2 in range(len(self.instructionStream.instructions)-1,start,-1):
             if self.instructionStream.instructions[index2].instruction == Instruction.loop_continue:
                 flag2 = True
                 break
@@ -156,6 +156,9 @@ class analyser:
                     self.overlookToMarks(overlookSet)
             # 因为文件终结符而结束
             elif self.isEnd():
+                index1,index2 = self.find_bnc(-1)
+                if not(index1 == None and index2 == None):
+                    self.error(Error.AN_ILLEGAL_INPUT,self.pointer,msg="break or continue can only use in loop")
                 break
             # 什么都识别不出来，只有报错跳过了
             else:
@@ -587,6 +590,13 @@ class analyser:
             if not self.pointer.isR_Parenthesis():
                 paraValue = self.expression_list(downOverlookSet)
                 V_function_call.append(paraValue)
+            else:
+                for func in self.symbolTable.funcs:
+                    if func.name == func_pointer.text:
+                        break
+                if len(func.para) > 0:
+                    self.error(Error.AN_ILLEGAL_INPUT,self.pointer.previous,msg="func should have some para")
+                    self.overlookToMarks(overlookset)
             if self.pointer.isR_Parenthesis():
                 V_function_call.append(self.pointer)
                 self.getsym()
@@ -1033,14 +1043,13 @@ class analyser:
     def condition(self, overlookSet = [const.R_BRACE]):
         label1 = 0
         V_condition = VN.create(const.CONDITION,self.level)
+        posit = len(self.instructionStream.instructions)
+        expression,tmp_exp_type = self.expression(overlookSet)
         base = 0
         for base in range(len(self.instructionStream.instructions)-1,-1,-1):
             if len(self.instructionStream.instructions[base].lab) > 0:
-               break    
-        label1 = len(self.instructionStream.instructions) - base
-        if base == 0:
-            label1 = 0
-        expression,tmp_exp_type = self.expression(overlookSet)
+               break  
+        label1 =  posit - base
         self.emit(Instruction(Instruction.nop))
         V_condition.append(expression)
         relationOperator = None
@@ -1089,14 +1098,14 @@ class analyser:
             cond,label1,relationOperator = self.condition(downOverlookSet)
             V_loop1_statement.append(cond)
             if self.pointer.isR_Parenthesis():
+                for base in range(len(self.instructionStream.instructions)-1,-1,-1):
+                    if len(self.instructionStream.instructions[base].lab) > 0:
+                        break
                 V_loop1_statement.append(self.pointer)
                 self.getsym()
                 self.emit(Instruction(Instruction.nop))
                 index = len(self.instructionStream.instructions) - 1
                 V_loop1_statement.append(self.statement(overlookSet))
-                for base in range(len(self.instructionStream.instructions)-1,-1,-1):
-                    if len(self.instructionStream.instructions[base].lab) > 0:
-                        break
                 label2 = len(self.instructionStream.instructions)-base+1
                 if not relationOperator == None:
                     if relationOperator.vtype == const.EQ:
@@ -1115,7 +1124,7 @@ class analyser:
                     self.instructionStream.instructions[index] = Instruction(Instruction.je,label2)
                 self.emit(Instruction(Instruction.jmp,label1))
                 # 加入对于break和continue的检查
-                bbreak,ccontinue = self.find_bnc()
+                bbreak,ccontinue = self.find_bnc(index)
                 if not bbreak == None:
                     self.instructionStream.instructions[bbreak] = Instruction(Instruction.jmp,label2)
                 if not ccontinue == None:
@@ -1136,14 +1145,12 @@ class analyser:
         V_loop2_statement = VN.create(const.LOOP_STATE,self.level)
         V_loop2_statement.append(self.pointer)
         self.getsym()
+        start = len(self.instructionStream.instructions)-1
+        V_loop2_statement.append(self.statement(overlookSet))
         for base in range(len(self.instructionStream.instructions)-1,-1,-1):
             if len(self.instructionStream.instructions[base].lab) > 0:
                 break
-        label2 = len(self.instructionStream.instructions)-base
-        if base == 0:
-            tmplabel = label2
-            label2 = 0
-        V_loop2_statement.append(self.statement(overlookSet))
+        label2 = start-base+1
         if self.pointer.isR_While():
             V_loop2_statement.append(self.pointer)
             self.getsym()
@@ -1170,9 +1177,9 @@ class analyser:
                     else:
                         self.emit(Instruction(Instruction.jne,label2))
                     # 加入对于break和continue的检查
-                    bbreak,ccontinue = self.find_bnc()
+                    bbreak,ccontinue = self.find_bnc(start)
                     if not bbreak == None:
-                        self.instructionStream.instructions[bbreak] = Instruction(Instruction.jmp,len(self.instructionStream.instructions)-tmplabel)
+                        self.instructionStream.instructions[bbreak] = Instruction(Instruction.jmp,len(self.instructionStream.instructions)-base)
                     if not ccontinue == None:
                         self.instructionStream.instructions[ccontinue] = Instruction(Instruction.jmp,label1)
                     # 读分号
