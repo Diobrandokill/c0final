@@ -1,17 +1,15 @@
 .constants:
 0  I  2              
-1  S  "fun"          
-2  D  0x4000000000000000
-3  S  "main"         
-4  I  0x63           
-5  I  7              
-6  S  "\x75\\1\n2\'3"
-7  I  0              
-8  S  "lalala"       
-9  S  "123"          
-10 S  "woshale"      
-11 I  1              
-12 I  100            
+1  S  "lalala"       
+2  I  0              
+3  I  1              
+4  S  "fun"          
+5  I  4              
+6  I  3              
+7  D  0x4000000000000000
+8  S  "main"         
+9  I  0x63           
+10 I  7              
 .start:
 0  snew  2       
 1  snew  2       
@@ -21,8 +19,33 @@
 5  dstore        
 .functions:
 0  1  1  1  
-1  3  0  1  
+1  4  1  1  
+2  8  0  1  
 .F0:
+0   snew   1       
+1   loada  0,1     
+2   loadc  0       
+3   istore         
+4   loada  0,0     
+5   iload          
+6   loadc  2       
+7   icmp           
+8   jle    17      
+9   loada  0,0     
+10  loada  0,0     
+11  iload          
+12  loadc  3       
+13  isub           
+14  istore         
+15  iprint         
+16  printl         
+17  loada  0,0     
+18  iload          
+19  loada  0,0     
+20  iload          
+21  imul           
+22  iret           
+.F1:
 0   snew   1       
 1   loada  0,1     
 2   loada  0,0     
@@ -30,87 +53,40 @@
 4   loadc  0       
 5   idiv           
 6   istore         
-7   loada  0,1     
-8   iload          
-9   iprint         
-10  printl         
-11  loada  0,1     
-12  iload          
+7   snew   1       
+8   loada  0,2     
+9   loadc  5       
+10  loadc  0       
+11  call   0       
+12  imul           
 13  i2d            
-14  loadc  2       
-15  dadd           
-16  dret           
-.F1:
+14  loadc  6       
+15  i2d            
+16  loada  1,2     
+17  dload          
+18  dmul           
+19  dadd           
+20  d2i            
+21  istore         
+22  loada  0,1     
+23  iload          
+24  i2d            
+25  loadc  7       
+26  dadd           
+27  dret           
+.F2:
 0   snew   1       
 1   loada  0,0     
-2   loadc  4       
+2   loadc  9       
 3   istore         
 4   loada  1,0     
-5   loadc  5       
+5   loadc  10      
 6   i2d            
 7   dstore         
-8   bipush 13      
-9   cprint         
-10  printl         
-11  loadc  6       
-12  sprint         
+8   loada  1,0     
+9   dload          
+10  d2i            
+11  call   1       
+12  dprint         
 13  printl         
-14  loada  0,0     
-15  iload          
-16  iprint         
-17  printl         
-18  loada  1,0     
-19  dload          
-20  d2i            
-21  call   0       
-22  dprint         
-23  printl         
-24  loada  1,2     
-25  dload          
-26  dprint         
-27  printl         
-28  loada  1,2     
-29  dload          
-30  loadc  7       
-31  i2d            
-32  dcmp           
-33  jge    48      
-34  loada  1,2     
-35  dload          
-36  loadc  7       
-37  i2d            
-38  dcmp           
-39  jle    44      
-40  loadc  8       
-41  sprint         
-42  printl         
-43  jmp    47      
-44  loadc  9       
-45  sprint         
-46  printl         
-47  jmp    72      
-48  snew   1       
-49  loada  0,0     
-50  loadc  7       
-51  istore         
-52  loadc  10      
-53  sprint         
-54  bipush 32      
-55  cprint         
-56  loada  0,0     
-57  iload          
-58  iprint         
-59  printl         
-60  loada  0,0     
-61  loada  0,0     
-62  iload          
-63  loadc  11      
-64  isub           
-65  istore         
-66  loada  0,0     
-67  iload          
-68  loadc  12      
-69  ineg           
-70  icmp           
-71  jg     52      
-72  ret            
+14  ret            

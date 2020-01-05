@@ -34,21 +34,33 @@ void main()
 
 double x;
 const double a = 2;
+int lalala(int num){
+   int lalala = 2;
+   if (num > 0){
+      num = num -1;
+      print(lalala(num));    
+   }
+   return num * num;
+}
 double fun(int num) {
     int rtv13 = num/2;
+    const int b = 4*lalala(2)+3*a;
     ;;;;;;;;;;;
-    print(rtv13);
+    //print(rtv13);
+    //print(b);
     return rtv13 + 2.0;
 }
 void main() {
     int y=0x63;
     //int y = 1;
     x = 7;
-    print('\r');
+    /*print('\r');
     print("\x75\\1\n2\'3");
     print(y);
+    */
     //y = fun(x);
     print(fun(x));
+    /*
     print(a);
     if(a<0) // if1
       if (a>0) // if2
@@ -63,5 +75,6 @@ void main() {
          }
          while(i>-100);
       }
+    */
     return;
 }

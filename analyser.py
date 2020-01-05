@@ -72,14 +72,14 @@ class analyser:
             funcexist = None
         else:
             funcexist = self.symbolTable.funcs[funcexistnum]
-        if ((not varexist == None and varexist.level < level) or varexist == None) and ((not funcexist == None and funcexist.level < level) or funcexist == None):
+        if ((not varexist == None and varexist.level < level) or varexist == None) and ((not funcexist == None and funcexist.level-1 < level) or funcexist == None):
             return True
         else:
             return False
 
     # <C0-program> ::= {<variable-declaration>}{<function-definition>}
     def C0_program(self):
-        overlookSet = [const.CONST, const.INT, const.VOID]
+        overlookSet = [const.CONST, const.INT, const.VOID,const.DOUBLE]
         V_program = VN.create(const.C0PROGRAM,self.level)
         flag = 0
         # {<variable-declaration>}
@@ -140,7 +140,7 @@ class analyser:
             # 什么都识别不出来，只有报错跳过了
             else:
                 self.error(Error.AN_ILLEGAL_INPUT,self.pointer)
-                self.overlookToMarks(overlookSet)
+                self.overlookToMarks([const.DOUBLE,const.INT,const.VOID])
         if not flag == 1:
             self.error(Error.AN_MISS_MAIN_FUNCTION,self.pointer.previous)
         return V_program
@@ -556,7 +556,7 @@ class analyser:
         func_pointer = self.pointer
         V_function_call.append(func_pointer)
         funcnum = self.symbolTable.getFunc(func_pointer.text)
-        if funcnum == None:
+        if funcnum == None or not self.symbolTable.getVar(self.pointer.text) == None:
             self.error(Error.ST_UNDEFINED_ID, self.pointer,msg="can not find this func")
             self.overlookToMarks(overlookset)
         self.getsym()
@@ -642,7 +642,11 @@ class analyser:
             if(self.pointer.isID()):
                 V_function_definition.append(self.pointer)
                 self.pointer.level = self.level
-                if not self.symbolTable.isunique(self.pointer.text) :
+                id = self.pointer
+                if not self.symbolTable.getConstant_by_value(id.text) == None or not self.symbolTable.getVar(id.text) == None:
+                    self.error(Error.AN_ILLEGAL_INPUT, id,msg="can not define the function with used name")
+                    self.overlookToMarks(overlookSet)
+                else:
                     self.symbolTable.constant.append(tableitem('S',self.pointer.text,self.pointer.level,0,0))
                 self.getsym()
             else:
@@ -658,7 +662,10 @@ class analyser:
                 V_function_definition.append(void)
                 self.pointer.level = self.level
                 id = self.pointer
-                if not self.symbolTable.isunique(self.pointer.text) :
+                if not self.symbolTable.getConstant_by_value(id.text) == None or not self.symbolTable.getVar(id.text) == None:
+                    self.error(Error.AN_ILLEGAL_INPUT, id,msg="can not define the function with used name")
+                    self.overlookToMarks(overlookSet)
+                else:
                     self.symbolTable.constant.append(tableitem('S',self.pointer.text,self.pointer.level,0,0))
                 V_function_definition.append(self.pointer)
                 self.getsym()
@@ -672,6 +679,7 @@ class analyser:
             self.error(Error.AN_ILLEGAL_TYPE, self.pointer,msg="invalid function type")
             self.overlookToMarks(overlookSet)
             return V_function_definition.empty()
+        
         # 接着是参数解析
         # 参数解析前加上函数名的 lab 标识，表示函数入口！
         self.instructionStream.setLab(id.text)
@@ -1348,28 +1356,25 @@ class analyser:
             returnValue = "DOUBLE"
         id = Vn.findChild(const.ID)
         name = id.text
-        if not self.symbolTable.getFunc(id.text) == None:
-            self.error(Error.AN_ILLEGAL_INPUT, id,msg="can not define the function with used name")
-            self.overlookToMarks(overlookSet)
         # 如果有参数表，记得加入参数到符号表中
         parameter = Vn.findChild(const.PARA_CLA)
-        if parameter.hasChild(const.PARA_DEC_LIST):
-            para_list = []
-            parameterList = parameter.findChild(const.PARA_DEC_LIST)
-            paraslot = 0
-            ids = parameterList.findGrandChildren(const.ID)
-            for id in ids:
-                if id.previous.isR_Double():
-                    paraslot += 2
-                    para_list.append("double")
-                elif id.previous.isR_Int():
-                    paraslot += 1
-                    para_list.append("int")
-            self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),paraslot,parameter.level,para_list,returnValue))
-        else:
-            para_list = []
-            self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),0,parameter.level,para_list,returnValue))
-            return
+        if not parameter == None:
+            if parameter.hasChild(const.PARA_DEC_LIST):
+                para_list = []
+                parameterList = parameter.findChild(const.PARA_DEC_LIST)
+                paraslot = 0
+                ids = parameterList.findGrandChildren(const.ID)
+                for id in ids:
+                    if id.previous.isR_Double():
+                        paraslot += 2
+                        para_list.append("double")
+                    elif id.previous.isR_Int():
+                        paraslot += 1
+                        para_list.append("int")
+                self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),paraslot,parameter.level,para_list,returnValue))
+            else:
+                para_list = []
+                self.symbolTable.funcs.append(func(name,self.symbolTable.getConstant_by_value(name),0,parameter.level,para_list,returnValue))
             
     # 语义分析
     # 函数定义结束后的符号表收尾动作
